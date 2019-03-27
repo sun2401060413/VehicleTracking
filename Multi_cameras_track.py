@@ -9,6 +9,11 @@ sys.path.append(r'D:\Project\tensorflow_model\VehicleTracking\AIC2018_iamai\ReID
 import pandas as pd
 import cv2
 import json
+from PIL import Image
+import matplotlib.pyplot as plt
+import torch
+import torch.nn as nn
+
 import compute_VeRi_dis as dist
 from Model_Wrapper import ResNet_Loader
 
@@ -38,7 +43,7 @@ if __name__=="__main__":
     box_info_3 = 'wuqiyuce3.csv'
     box_info_4 = 'wuqiyuce4.csv'
 
-    img_filepath_2 = os.path.join(dataset_root,cam_2) 
+    img_savepath_1 = os.path.join(save_root,cam_1)
     img_savepath_2 = os.path.join(save_root,cam_2)
     
     # cmp_1,cmp_2 = get_CVPR_VehReId_data()
@@ -59,10 +64,45 @@ if __name__=="__main__":
     dis_mat = r"E:\DataSet\BoxCars\Reid_dataset\BoxCars"
     batch_size = 1
     print('loading model....')
-    # model = ResNet_Loader(load_ckpt,n_layer,output_color=False,batch_size=1)
+    model = ResNet_Loader(load_ckpt,n_layer,output_color=False,batch_size=1)
 
-    data = load_crop_img_list(img_savepath_2)
-    print(data)
+    data_1 = load_crop_img_list(img_savepath_1)
+    data_2 = load_crop_img_list(img_savepath_2)
+    list_1 = [data_1['0'][2],data_1['1'][2],data_1['2'][2],data_1['3'][2],data_1['4'][2]]
+    list_2 = [data_2['0'][2],data_2['1'][2],data_2['2'][2],data_2['3'][2],data_2['4'][2]]
+    
+    plt.figure("Image") #
+    for i,elem in enumerate(list_1):
+        name,_ = os.path.splitext(os.path.split(elem)[1])
+        img = Image.open(os.path.join(elem))
+        plt.subplot(2,5,i+1)
+        plt.imshow(img)
+        print(name)
+        plt.title(name)
+    for i,elem in enumerate(list_2):
+        name,_ = os.path.splitext(os.path.split(elem)[1])
+        img = Image.open(os.path.join(elem))
+        plt.subplot(2,5,i+6)
+        plt.imshow(img)
+        print(name)
+        plt.title(name)
+
+    q_features = model.inference(list_1)
+    g_features = model.inference(list_2)
+            
+    q_features = nn.functional.normalize(q_features,dim=1).cuda()
+    g_features = nn.functional.normalize(g_features,dim=1).transpose(0,1).cuda()
+
+    print('compute distance')
+    SimMat = -1 * torch.mm(q_features,g_features)
+    SimMat = SimMat.cpu().transpose(0,1)
+
+    SimMat = SimMat.numpy()
+    data1 = pd.DataFrame(SimMat)
+    data1.to_csv(os.path.join(r'D:\Project\tensorflow_model\VehicleTracking\data_generator\gen_data','data1.csv'))
+    
+    plt.show()
+    
     # with open(args.query_txt,'r') as f:
         # # query_txt = [q.strip() for q in f.readlines()]
         # # query_txt = query_txt[1:]
