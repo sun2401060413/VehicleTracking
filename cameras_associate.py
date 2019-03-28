@@ -19,10 +19,9 @@ import Perspective_transform as pt
 from mpl_toolkits.mplot3d import Axes3D
 import seaborn as sns
 
-# style set 这里只是一些简单的style设置
+# style set for figure
 sns.set_palette('deep', desat=.6)
 sns.set_context(rc={'figure.figsize': (8, 5) } )
-# figsize是常用的参数
 
 
 # root path
@@ -111,7 +110,7 @@ class Gauss_distribution(object):
         return np.exp(-num/2)/den
         
 def gaussian_test():
-    '''没用,只是测试一下gauss类的效果'''
+    '''No use for this task, just for testing the effect of gaussian distribution'''
     # 1D gauss testing
     obj_1D = Gauss_distribution(0,2)
 
@@ -144,7 +143,7 @@ def gaussian_test():
     plt.show()
 
 def get_dist_in_deltaT(pt_trace):
-    '''Get the distance of object in delta t'''
+    '''Get moving distance of object within delta t'''
     delta_loc = {}
     for k in pt_trace:
         obj_trace = pt_trace[k]
@@ -183,15 +182,67 @@ def get_STP_in_single_camera(pt_trace):
     Parameters:
         pt_trace:trace after perspective transformation in a single camera
     '''
-    return
+    dist_dict_1 = get_dist_in_deltaT(pt_trace)
+    result = get_statistical_paras_of_dist_in_deltaT(dist_dict_1)
+    return result
     
 def get_STP_in_multi_cameras(pt_trace_1,pt_trace_2,associate_dict):
     '''
-    parameters:
+    Parameters:
         pt_trace_1:trace after perspective transformation in cam_1
         pt_trace_2:trace after perspective transformation in cam_2
         associate_dict:mapping relation between objects in cam_1 and cam_2
     '''
+    # chosen_id_cam_1 = 2
+    # chosen_id_cam_2 = associate_dict[chosen_id_cam_1]
+    # pt_box_1,frame_cam_1 = zip(*pt_trace_1[str(chosen_id_cam_1)])
+    # pt_box_2,frame_cam_2 = zip(*pt_trace_2[str(chosen_id_cam_2)])
+    
+    STP_S_1 = get_STP_in_single_camera(pt_trace_1)
+    STP_S_2 = get_STP_in_single_camera(pt_trace_2)
+
+    objs_associate_info = []
+    for k in associate_dict:
+        objs_associate_info.append([pt_trace_1[str(k)][0],pt_trace_2[str(k)][0]])
+    for i,v in enumerate(objs_associate_info):
+        x,y = v[0][0][0],v[0][0][1]
+        delta_t = v[1][1]-v[0][1]
+        pred_x = x + delta_t*STP_S_1[str(i)]['mean_x']
+        pred_y = y + delta_t*STP_S_1[str(i)]['mean_y']
+        v.append([pred_x,pred_y])
+    src_pts = np.array([elem[2] for elem in objs_associate_info])
+    dst_pts = np.array([elem[1][0] for elem in objs_associate_info])
+    
+    print(src_pts)
+    print(dst_pts)
+    # Get affine transform matrix using least square algorithm
+    trans_matrix,_ = cv2.findHomography(src_pts,dst_pts,cv2.RANSAC,1.0)
+    print(trans_matrix)
+    
+    input_vector = np.array(src_pts)
+    pt = cv2.transform(input_vector[None,:,:],trans_matrix)
+    M = np.mat(trans_matrix[:2])
+    print(M)
+    
+    im = np.mat((src_pts[0][0],src_pts[0][1],1)).T
+    print(im)
+    rim = M*im
+    print(rim)
+    
+    # TEST: affine transformation
+    
+    
+        
+        
+        
+    # delta_t_between_cams = frame_cam_2[0] - frame_cam_1[0]
+    # print(delta_t_between_cams)
+    
+    # pred_x = pt_box_1[0][0]+delta_t_between_cams*STP_S_1[str(chosen_id_cam_1)]['mean_x']
+    # pred_y = pt_box_1[0][1]+delta_t_between_cams*STP_S_1[str(chosen_id_cam_1)]['mean_y']
+    # print(pred_x,pred_y)
+    
+    
     return
     
 def get_box_center(box_list):
@@ -304,11 +355,10 @@ def get_normalize_mat(data):
     return n_data
     
 def get_rational_value(x,low,high):
-    '''limit the range of input '''
+    '''Limit input in range'''
     y = np.max([np.min([x,high]),0])
     return y
-def get_pred_img(pred_height,pred_width,obj_nx,obj_ny,):
-    return
+
     
 if __name__=="__main__":
     # cam A
@@ -327,7 +377,6 @@ if __name__=="__main__":
 
     tracker_record_1 = load_tracking_info(img_savepath_1)
     tracker_record_2 = load_tracking_info(img_savepath_2)
-  
     
     # # ----- 原始IOU_tracker 跟踪轨迹显示 test -----
     # # print(tracker_record_1['2']['list'])
@@ -359,16 +408,15 @@ if __name__=="__main__":
     pt_box_info_1 = get_pt_box_info(tracker_record_1,pt_obj_1)
     pt_box_info_2 = get_pt_box_info(tracker_record_2,pt_obj_2)
     
-    # # 单摄像机目标位置预测
+    d = get_STP_in_multi_cameras(pt_box_info_1,pt_box_info_2,associate_dict_c1_c2)
+    
+    # ----- TEST: location predicting in single camera -----
     # match_based_on_spatial_temperal_prior_test_1(pt_box_info_1,pt_obj_1)
     
-    # 暂时还没用
-    get_STP_in_single_camera(pt_box_info_1)
-    
-    dist_dict_1 = get_dist_in_deltaT(pt_box_info_1) # camera_1
-    d = get_statistical_paras_of_dist_in_deltaT(dist_dict_1)
+    # ----- TEST: spatial temperal prior in single camera -----
+    # d = get_STP_in_single_camera(pt_box_info_1)
 
-    # ----- 概率计算 1D test ----- 
+    # ----- TEST: 概率计算 1D ----- 
     # n = 10
     # obj_nx = Gauss_distribution(n*d['1']['mean_x'],n**2*d['1']['var_x'])
     # obj_ny = Gauss_distribution(n*d['1']['mean_y'],n**2*d['1']['var_y'])
@@ -387,7 +435,7 @@ if __name__=="__main__":
     # plt.show()
     
     
-    # ----- 2D gauss testing -----
+    # ----- TEST: 2D gaussian distribution -----
     # X = np.linspace(-1,1,60)
     # Y = np.linspace(-1,1,60)
     # X,Y = np.meshgrid(X,Y)
@@ -409,7 +457,7 @@ if __name__=="__main__":
     # ax.view_init(27,-21)
     # plt.show()
     
-    # ----- 数据分布 test -----
+    # ----- TEST: Display gaussian distribution in 3D -----
     # with sns.axes_style("dark"):
         # sns.jointplot(display_x, display_y, kind="kde",space=0)
     # plt.show()
