@@ -66,7 +66,7 @@ associate_dict_c3_c4 = {
     4:4
 }
 
-# ========== CLASS =========
+# ========== BASIC CLASS ==========
 class Gauss_distribution(object):
     def __init__(self,mu,sigma):
         self.mu = mu
@@ -111,8 +111,8 @@ class Gauss_distribution(object):
 
 class Single_camera_STP(object):
     def __init__(   self,
-                    perspective_transformer = None,
                     tracking_record = None,
+                    perspective_transformer = None,
                     time_interval = 25):
         self.perspective_transformer = perspective_transformer
         self.tracking_record = tracking_record
@@ -124,7 +124,6 @@ class Single_camera_STP(object):
         self.motion_params_4_each = None
         
         self.get_motion_params()
-        
         self.nx_predictor = Gauss_distribution(
                                     self.time_interval*self.motion_params_4_all['mean_x'],
                                     self.time_interval**2*self.motion_params_4_all['var_x'])
@@ -136,9 +135,20 @@ class Single_camera_STP(object):
         self.distance_dict = get_dist_in_deltaT(self.perspective_trace)
         self.motion_params_4_each,self.motion_params_4_all = get_statistical_paras_of_dist_in_deltaT(self.distance_dict)
         return self.motion_params_4_each,self.motion_params_4_all
-
-    def get_probability_map(self,base_x,base_y,height=300,width=80):
-        return get_probability_map(self.nx_predictor,self.ny_predictor,base_x,base_y,height,width)
+        
+    def update_predictor(self,tracking_record=None,time_interval=25):
+        if tracking_record is not None:
+            self.tracking_record = tracking_record
+            self.get_motion_params()
+        self.nx_predictor = Gauss_distribution(
+                                    self.time_interval*self.motion_params_4_all['mean_x'],
+                                    self.time_interval*self.motion_params_4_all['var_x'])
+        self.ny_predictor = Gauss_distribution(
+                                    self.time_interval*self.motion_params_4_all['mean_y'],
+                                    self.time_interval*self.motion_params_4_all['var_y'])
+            
+    def get_probability_map(self,base_x,base_y,start_x=0,start_y=0,height=300,width=80):
+        return get_probability_map(self.nx_predictor,self.ny_predictor,base_x,base_y,start_x,start_y,height,width)
         
     def get_probability(self,x,y,base_x,base_y):
         delta_x = x - base_x 
@@ -153,60 +163,111 @@ class Single_camera_STP(object):
 
 class Multi_cameras_STP(object):
     def __init__(   self,
-                    perspective_transformer_cam_1 = None
-                    perspective_transformer_cam_2 = None
-                    tracker_record_cam_1 = None
-                    tracker_record_cam_2 = None
+                    obj_single_camera_STP_cam_1,
+                    obj_single_camera_STP_cam_2,
                     associate_dict = None):
-        self.perspective_transformer_cam_1 = perspective_transformer_cam_1
-        self.perspective_transformer_cam_2 = perspective_transformer_cam_2
-        self.tracker_record_cam_1 = tracker_record_cam_1
-        self.tracker_record_cam_2 = tracker_record_cam_2
+        self.obj_single_camera_STP_cam_1 = obj_single_camera_STP_cam_1
+        self.obj_single_camera_STP_cam_2 = obj_single_camera_STP_cam_2
         self.associate_dict = associate_dict
         
-        self.perspective_trace_cam_1 = None
-        self.perspective_trace_cam_2 = None
-        self.distance_dict_cam_1 = None
-        self.distance_dict_cam_2 = None
-        self.motion_params_4_all_cam_1 = None
-        self.motion_params_4_each_cam_1 = None
+        self.coord_pairs = None
+        self.coord_transformer = None
+        self.starting_point = None
         
-        self.coord_transfomer = None   
+        self.get_coord_transformer()
+        self.get_start_point_transform()
         
-def gaussian_test():
-    '''No use for this task, just for testing the effect of gaussian distribution'''
-    # 1D gauss testing
-    obj_1D = Gauss_distribution(0,2)
+    def get_coord_transformer(self):
+        self.coord_pairs = get_STP_in_multi_cameras(
+                                    self.obj_single_camera_STP_cam_1,
+                                    self.obj_single_camera_STP_cam_2,
+                                    self.associate_dict
+                                    )
+                                    
+        cam_1_x,cam_2_x,cam_1_y,cam_2_y = self.coord_pairs
+        
+        self.coord_transformer = {}
+        
+        # Front to back transformer
+        F2B_transformer = {}
+        
+        model_F2B_x = LinearRegression()
+        model_F2B_x.fit(cam_1_x, cam_2_x)
+        model_F2B_y = LinearRegression()
+        model_F2B_y.fit(cam_1_y, cam_2_y)
+        
+        F2B_transformer['x'] = model_F2B_x
+        F2B_transformer['y'] = model_F2B_y
+        
+        # Back to front transformer
+        B2F_transformer = {}
+        
+        model_B2F_x = LinearRegression()
+        model_B2F_x.fit(cam_2_x, cam_1_x)
+        model_B2F_y = LinearRegression()
+        model_B2F_y.fit(cam_2_y, cam_1_y)
+        
+        B2F_transformer['x'] = model_B2F_x
+        B2F_transformer['y'] = model_B2F_y
+        
+        # Coordinate transformer
+        self.coord_transformer['F2B'] = F2B_transformer
+        self.coord_transformer['B2F'] = B2F_transformer
+        
+        return self.coord_transformer
 
-    x = np.linspace(-10,10,100)
-    y = obj_1D.get_probability(x)
+    def get_start_point_transform(self,start_x_in_cam_2=0,start_y_in_cam_2=0):
+        '''Transform the coordinate value of starting point in cam 2 into the coordinate value in cam 1
+            The coordinate value refers the position of object after perspective transforming.
+        '''
+        corresponding_start_x_in_cam_1 = self.coord_transformer['B2F']['x'].predict([[start_x_in_cam_2]])[0][0]
+        corresponding_start_y_in_cam_1 = self.coord_transformer['B2F']['y'].predict([[start_y_in_cam_2]])[0][0]
+        # print(corresponding_start_x_in_cam_1,corresponding_start_y_in_cam_1)
+        self.starting_point = [corresponding_start_x_in_cam_1,corresponding_start_y_in_cam_1]
+        return self.starting_point
     
-    plt.plot(x,y,'b-',linewidth=3)
-    
-    # 2D gauss testing
-    X = np.linspace(-3,3,60)
-    Y = np.linspace(-4,4,60)
-    X,Y = np.meshgrid(X,Y)
-    mu = np.array([0.,0.])
-    Sigma = np.array([[1.,-0.5],[-0.5,1.5]])
-    pos = np.empty(X.shape+(2,))
-    pos[:,:,0]= X
-    pos[:,:,1] = Y
+    def get_probability_map(self,base_x,base_y,t_interval=None,height=300,width=80):
+        nx_predictor = Gauss_distribution(  t_interval*self.obj_single_camera_STP_cam_1.motion_params_4_all['mean_x'],
+                                            t_interval*5*self.obj_single_camera_STP_cam_1.motion_params_4_all['var_x'])
+        ny_predictor = Gauss_distribution(  t_interval*self.obj_single_camera_STP_cam_1.motion_params_4_all['mean_y'],
+                                            t_interval*self.obj_single_camera_STP_cam_1.motion_params_4_all['var_y'])
+        # print("starting_points:",self.starting_point[0],self.starting_point[1])
+        
+        return get_probability_map( nx_predictor,
+                                    ny_predictor,
+                                    base_x,
+                                    base_y,
+                                    start_x=self.starting_point[0],
+                                    start_y=self.starting_point[1],
+                                    )
+                                    
+    def get_probability(self,x,y,base_x,base_y,t_interval=None):
+        trans_x = self.coord_transformer['B2F']['x'].predict([[x]])[0][0]
+        trans_y = self.coord_transformer['B2F']['y'].predict([[y]])[0][0]
+        delta_x = trans_x - base_x
+        delta_y = trans_y - base_y
 
-    obj_2D = Gauss_distribution(mu,Sigma)
-    Z = obj_2D.get_probability(pos)
-
-    fig =plt.figure()
-    ax = fig.gca(projection='3d')
-    ax.plot_surface(X,Y,Z,rstride=3,cstride=3,linewidth=1,antialiased =True)
-    cset = ax.contour(X,Y,Z,zdir='z',offset=-0.15)
-
-    ax.set_zlim(-0.15,0.2)
-    ax.set_zticks(np.linspace(0,0.2,5))
-    ax.view_init(27,-21)
-    plt.show()
-
-# =========== FUNCITIONS ==============     
+        print("delta_x:",delta_x,"delta_y:",delta_y)
+        nx_predictor = Gauss_distribution(  
+                        t_interval*self.obj_single_camera_STP_cam_1.motion_params_4_all['mean_x'],
+                        t_interval*self.obj_single_camera_STP_cam_1.motion_params_4_all['var_x'])
+        ny_predictor = Gauss_distribution(  
+                        t_interval*self.obj_single_camera_STP_cam_1.motion_params_4_all['mean_y'],
+                        t_interval*0.5*self.obj_single_camera_STP_cam_1.motion_params_4_all['var_y'])
+        print('p_x',nx_predictor.get_probability(delta_x))      
+        print('p_y',ny_predictor.get_probability(delta_y))                       
+        return nx_predictor.get_probability(delta_x),ny_predictor.get_probability(delta_y)
+        
+    def get_distance(self,x,y,base_x,base_y,t_interval=None,alpha=0.5):
+        trans_x = self.coord_transformer['B2F']['x'].predict([[x]])[0][0]
+        trans_y = self.coord_transformer['B2F']['y'].predict([[y]])[0][0]
+        pred_x = base_x+t_interval*self.obj_single_camera_STP_cam_1.motion_params_4_all['mean_x']
+        pred_y = base_y+t_interval*self.obj_single_camera_STP_cam_1.motion_params_4_all['mean_y']
+        comp_distance = abs(x-pred_x)*(1-alpha)+abs(y-pred_y)*alpha
+        return comp_distance
+        
+        
+# =========== UTILS FUNCTIONS ============
 def get_dist_in_deltaT(pt_trace):
     '''Get moving distance of object within delta t'''
     delta_loc = {}
@@ -263,22 +324,28 @@ def get_STP_in_single_camera(pt_trace):
     res_4_each,res_4_all = get_statistical_paras_of_dist_in_deltaT(dist_dict_1)
     return res_4_each,res_4_all
     
-def get_STP_in_multi_cameras(pt_trace_1,pt_trace_2,associate_dict):
+def get_STP_in_multi_cameras(obj_single_camera_STP_cam_1,obj_single_camera_STP_cam_2,associate_dict):
     '''
     Parameters:
-        pt_trace_1:trace after perspective transformation in cam_1
-        pt_trace_2:trace after perspective transformation in cam_2
+        obj_single_camera_STP_cam_1: STP in cam 1
+        obj_single_camera_STP_cam_2: STP in cam 2
         associate_dict:mapping relation between objects in cam_1 and cam_2
     '''
     # chosen_id_cam_1 = 2
     # chosen_id_cam_2 = associate_dict[chosen_id_cam_1]
     # pt_box_1,frame_cam_1 = zip(*pt_trace_1[str(chosen_id_cam_1)])
     # pt_box_2,frame_cam_2 = zip(*pt_trace_2[str(chosen_id_cam_2)])
-    
-    STP_S_4_each_1,STP_S_4_all_1 = get_STP_in_single_camera(pt_trace_1)
-    STP_S_4_each_2,STP_S_4_all_2 = get_STP_in_single_camera(pt_trace_2)
    
-    # # ===== Method 1: predict location using global parameters =====
+    STP_S_4_each_1 = obj_single_camera_STP_cam_1.motion_params_4_each
+    STP_S_4_all_1 = obj_single_camera_STP_cam_1.motion_params_4_all
+    STP_S_4_each_2 = obj_single_camera_STP_cam_2.motion_params_4_each
+    STP_S_4_all_2 = obj_single_camera_STP_cam_2.motion_params_4_all
+    
+    pt_trace_1 = obj_single_camera_STP_cam_1.perspective_trace
+    pt_trace_2 = obj_single_camera_STP_cam_2.perspective_trace
+    
+   
+    # # ===== Method 1: Predict location using motion parameters for all objects =====
     # objs_associate_info = []
     # for k in associate_dict:
         # for i in range(min(len(pt_trace_1[str(k)]),len(pt_trace_2[str(k)]))):
@@ -307,25 +374,21 @@ def get_STP_in_multi_cameras(pt_trace_1,pt_trace_2,associate_dict):
         pred_y = y + delta_t*STP_S_4_each_1[str(objs_associate_info[i][0])]['mean_y']
         v.append([pred_x,pred_y])
         
-    src_x,src_y = np.array([elem[3][0] for elem in objs_associate_info]),np.array([elem[3][1] for elem in objs_associate_info])
-    dst_x,dst_y = np.array([elem[2][0][0] for elem in objs_associate_info]),np.array([elem[2][0][1] for elem in objs_associate_info])
+    cam_1_x,cam_1_y = np.array([elem[3][0] for elem in objs_associate_info]),np.array([elem[3][1] for elem in objs_associate_info])
+    cam_2_x,cam_2_y = np.array([elem[2][0][0] for elem in objs_associate_info]),np.array([elem[2][0][1] for elem in objs_associate_info])
     
-    for i in range(len(src_y)):
-        print(src_y[i],dst_y[i])
+    # for i in range(len(src_y)):
+        # print(cam_1_y[i],cam_2_y[i])
     # plt.scatter(src_y,dst_y)
     # plt.show()
     
-    src_x = np.reshape(src_x,(-1,1))
-    dst_x = np.reshape(dst_x,(-1,1))
-    src_y = np.reshape(src_y,(-1,1))
-    dst_y = np.reshape(dst_y,(-1,1))
+    cam_1_x = np.reshape(cam_1_x,(-1,1))
+    cam_2_x = np.reshape(cam_2_x,(-1,1))
+    cam_1_y = np.reshape(cam_1_y,(-1,1))
+    cam_2_y = np.reshape(cam_2_y,(-1,1))
     
-    model_x = LinearRegression()
-    model_x.fit(src_x, dst_x)
-    model_y = LinearRegression()
-    model_y.fit(src_y, dst_y)
-    pred_x = model_x.predict(src_x)
-    pred_y = model_y.predict(src_y)
+    # pred_x = model_x.predict(src_x)
+    # pred_y = model_y.predict(src_y)
     
     # plt.plot(src_y,dst_y,'b-',linewidth=3)
     # plt.scatter(pred_x,dst_x)
@@ -351,7 +414,7 @@ def get_STP_in_multi_cameras(pt_trace_1,pt_trace_2,associate_dict):
         # rim = M*im
         # print(rim)
 
-    return
+    return cam_1_x, cam_2_x, cam_1_y, cam_2_y
     
 def get_box_center(box_list):
     center_box_list = []
@@ -376,135 +439,17 @@ def get_pt_box_info(box_info,pt_obj):
         center_box_list = get_box_center(box_list)
         pt_box_list = pt_obj.get_pred_transform(center_box_list)
         return list(zip(pt_box_list[0],frame_list))
-            
-def match_based_on_spatial_temperal_prior_test_1(tracker_record,pt_obj,t_interval=30):
-    '''test location predicting of object,
-    Predict object location in future based on the current object location, movement characteristics and time interval setting
-    Parameters:
-        tracker_record: tracking information
-        pt_obj: perspective transformer object
-        t_interval: time interval(frames)
-    '''
-    # file path
-    img_root = r'E:\DataSet\trajectory\concatVD\wuqi1B'
-    save_root = r'D:\Project\tensorflow_model\VehicleTracking\data_generator\gen_data\resutls\loc_predicate\Frame30'
-    test_id = '1'
 
-    obj_STP = Single_camera_STP(pt_obj,tracker_record,t_interval)
-       
-    # test on id 1
-    for v,elem in enumerate(obj_STP.perspective_trace[test_id]):
-        if v+t_interval>len(obj_STP.perspective_trace[test_id])-1:
-            break
-        fname_1 = str(elem[1])+'.jpg'
-        fname_2 = str(elem[1]+t_interval)+'.jpg'
-        
-        test_x,test_y = obj_STP.perspective_trace[test_id][v+t_interval][0][0],obj_STP.perspective_trace[test_id][v+t_interval][0][1]
-        print("Probability:",obj_STP.get_probability(test_x,test_y,elem[0][0],elem[0][1]))
-        print("Distance:",obj_STP.get_distance(test_x,test_y,elem[0][0],elem[0][1]))
-        
-        p_map = obj_STP.get_probability_map(base_x=elem[0][0],base_y=elem[0][1])
-        
-        
+def get_probability_map(obj_nx,obj_ny,base_x,base_y,start_x=0,start_y=0,height=300,width=80):
 
-        color_p_map = np.zeros([p_map.shape[0],p_map.shape[1],3],dtype=np.uint8)
-        color_p_map[:,:,1] = p_map
-        color_p_map = cv2.resize(color_p_map,(int(pt_obj.transformed_width_for_disp),int(pt_obj.transformed_height_for_disp)))
-        color_p_map = cv2.flip(color_p_map,0)   # 0:vertical flip
-        pt_color_p_map = pt_obj.get_inverse_disp_transform(color_p_map)
-        
-        p_top = np.where(pt_color_p_map[:,:,1]==np.max(pt_color_p_map[:,:,1]))
-        
-        img_1 = cv2.imread(os.path.join(img_root,fname_1))  # current frame
-        img_2 = cv2.imread(os.path.join(img_root,fname_2))  # frame after fixed time interval 
-        diff_img = cv2.absdiff(img_1,img_2)                 # For displaying same object from different frames in one image.
-
-        
-        alpha = 0.5
-        inverse_elem = pt_obj.get_inverse_pred_transform([elem[0]])
-        img_3 = cv2.addWeighted(img_1, alpha, diff_img, 1-alpha, 0)
-        alpha = 0.7
-        img_3 = cv2.addWeighted(img_3, alpha, pt_color_p_map, 1-alpha, 0)
-        
-        for i in range(len(p_top[0])):
-            cv2.circle(img_3,(p_top[1][i],p_top[0][i]),5,(0,0,255),5)
-            
-        cv2.namedWindow('img_3',cv2.WINDOW_NORMAL)
-        cv2.imshow('img_3',img_3)
-        cv2.imwrite(os.path.join(save_root,fname_1),img_3)
-        
-        cv2.waitKey()
-    return
-    
-def match_based_on_spatial_temperal_prior_test_2(pt_box_info,pt_obj,t_interval=30):
-    '''test location predicting of object,
-    Predict object location in future based on current object location, movement characteristics and time interval setting
-    Parameters:
-        pt_box_info: Bounding box information after perspective transformation
-        pt_obj: perspective transformer object
-        t_interval: time interval(frames)
-    '''
-    # file path
-    img_root = r'E:\DataSet\trajectory\concatVD\wuqi1B'
-    save_root = r'D:\Project\tensorflow_model\VehicleTracking\data_generator\gen_data\resutls\loc_predicate\Frame30'
-    test_id = '1'
-
-    dist_dict_1 = get_dist_in_deltaT(pt_box_info)
-    stat_4_each,stat_4_all = get_statistical_paras_of_dist_in_deltaT(dist_dict_1)
-    obj_nx = Gauss_distribution(    t_interval*stat_4_all['mean_x'],
-                                    t_interval**2*stat_4_all['var_x'])
-    obj_ny = Gauss_distribution(    t_interval*stat_4_all['mean_y'],
-                                    t_interval*stat_4_all['var_y'])
-       
-    # test on id 1
-    for v,elem in enumerate(pt_box_info[test_id]):
-        fname_1 = str(elem[1])+'.jpg'
-        fname_2 = str(elem[1]+t_interval)+'.jpg'
-        print(elem[0])
-        x_elem = get_rational_value(elem[0][0]*10,0,80)
-        y_elem = get_rational_value(elem[0][1]*10,0,300)
-
-        print(pt_box_info['1'][v+t_interval][0])
-        
-        p_map = get_probability_map(obj_nx,obj_ny,elem[0][0],elem[0][1])
-        color_p_map = np.zeros([p_map.shape[0],p_map.shape[1],3],dtype=np.uint8)
-        color_p_map[:,:,1] = p_map
-        color_p_map = cv2.resize(color_p_map,(int(pt_obj.transformed_width_for_disp),int(pt_obj.transformed_height_for_disp)))
-        color_p_map = cv2.flip(color_p_map,0)   # 0:vertical flip
-        pt_color_p_map = pt_obj.get_inverse_disp_transform(color_p_map)
-        
-        # cv2.namedWindow('pt_color_p_map',cv2.WINDOW_NORMAL)
-        # cv2.imshow('pt_color_p_map',pt_color_p_map)
-        # cv2.waitKey()
-        
-        img_1 = cv2.imread(os.path.join(img_root,fname_1))  # current frame
-        img_2 = cv2.imread(os.path.join(img_root,fname_2))  # frame after fixed time interval 
-        diff_img = cv2.absdiff(img_1,img_2)                 # For displaying same object from different frames in one image.
-        alpha = 0.5
-        inverse_elem = pt_obj.get_inverse_pred_transform([elem[0]])
-        img_3 = cv2.addWeighted(img_1, alpha, diff_img, 1-alpha, 0)
-
-        alpha = 0.7
-        img_3 = cv2.addWeighted(img_3, alpha, pt_color_p_map, 1-alpha, 0)
-
-        cv2.namedWindow('img_3',cv2.WINDOW_NORMAL)
-        cv2.imshow('img_3',img_3)
-        # cv2.imwrite(os.path.join(save_root,fname_1),img_3)
-        
-        cv2.waitKey()
-    return 
-    
-def get_probability_map(obj_nx,obj_ny,base_x,base_y,height=300,width=80):
-
-    x = np.linspace(0,width/10,width)
-    y = np.linspace(0,height/10,height)
+    x = np.linspace(start_x,start_x+width/10,width)
+    y = np.linspace(start_y,start_y+height/10,height)
 
     delta_x = x - base_x 
     delta_y = y - base_y
-
+    
     p_x = obj_nx.get_probability(delta_x)
     p_y = obj_ny.get_probability(delta_y)
-
     # # ----- TEST:单变量分布显示 -----
     # plt.plot(base_x,p_x,'b-',linewidth=3)
     # plt.plot(base_y,p_y,'r-',linewidth=3)
@@ -524,7 +469,10 @@ def get_normalize_mat(data):
     mn = np.min(data)
     mx_mat = np.ones_like(data)*mx
     mn_mat = np.ones_like(data)*mn
-    n_data = np.array((data-mn_mat)*255/(mx-mn),dtype=np.uint8)
+    if mx-mn > 0:
+        n_data = np.array((data-mn_mat)*255/(mx-mn),dtype=np.uint8)
+    else:
+        n_data = np.zeros_like(data)
     
     # # # ----- TEST: n_data disp -----
     # print("max:",np.max(n_data))
@@ -541,87 +489,213 @@ def get_rational_value(x,low,high):
     y = np.max([np.min([x,high]),0])
     return y
 
+# ========== TEST FUNCTIONS ===========
+def gaussian_test():
+    '''Useless for this task, just for testing the effect of gaussian distribution'''
+    print("===== Get in the gaussian_test! ===== ")
+    
+    # 1D gauss testing
+    obj_1D = Gauss_distribution(0,2)
 
-# ========== Main Function ===========
-if __name__=="__main__":
-    # cam A
-    device_id = 0
+    x = np.linspace(-10,10,100)
+    y = obj_1D.get_probability(x)
+    
+    plt.plot(x,y,'b-',linewidth=3)
+    
+    # 2D gauss testing
+    X = np.linspace(-3,3,60)
+    Y = np.linspace(-4,4,60)
+    X,Y = np.meshgrid(X,Y)
+    mu = np.array([0.,0.])
+    Sigma = np.array([[1.,-0.5],[-0.5,1.5]])
+    pos = np.empty(X.shape+(2,))
+    pos[:,:,0]= X
+    pos[:,:,1] = Y
 
-    img_filepath_1 = os.path.join(dataset_root,device_info[device_id][0]) 
-    img_savepath_1 = os.path.join(save_root,device_info[device_id][0])
-    pt_savepath_1 = os.path.join(pt_trans_root,device_info[device_id][2])
-    
-    # cam B
-    associate_device_id = associate_cam[device_id]
-    
-    img_filepath_2 = os.path.join(dataset_root,device_info[associate_device_id][0]) 
-    img_savepath_2 = os.path.join(save_root,device_info[associate_device_id][0])
-    pt_savepath_2 = os.path.join(pt_trans_root,device_info[associate_device_id][2])
+    obj_2D = Gauss_distribution(mu,Sigma)
+    Z = obj_2D.get_probability(pos)
 
-    tracker_record_1 = load_tracking_info(img_savepath_1)
-    tracker_record_2 = load_tracking_info(img_savepath_2)
-    
-    # # ----- 原始IOU_tracker 跟踪轨迹显示 test -----
-    # # print(tracker_record_1['2']['list'])
-    # # img = cv2.imread(r'E:\DataSet\trajectory\concatVD\wuqi1B\0.jpg')
-    # # for elem in tracker_record_1['4']['list']:
-        # # print(elem[0][2],elem[0][3])
-        # # cv2.circle(img,(elem[0][2],elem[0][3]),10,(0,0,255),10)
-    # # cv2.namedWindow('img_1',cv2.WINDOW_NORMAL)
-    # # cv2.imshow('img_1',img)
-    # # cv2.waitKey()
-    
-    # # ----- center 轨迹显示 test -----
-    # chosen_id = '3'
-    # BBox,BFrame = zip(*tracker_record_1[chosen_id]['list'])
-    # Center_BBox = get_box_center(BBox)
-    # print(Center_BBox)
-    # img = cv2.imread(r'E:\DataSet\trajectory\concatVD\wuqi1B\0.jpg')
-    # for elem in Center_BBox:
-        # print(elem)
-        # cv2.circle(img,(int(elem[0]),int(elem[1])),10,(0,0,255),10)
-    # cv2.namedWindow('img_1',cv2.WINDOW_NORMAL)
-    # cv2.imshow('img_1',img)
-    # cv2.waitKey()
-    
-    
-    pt_obj_1 = pt.Perspective_transformer(pt_savepath_1)
-    pt_obj_2 = pt.Perspective_transformer(pt_savepath_2)
-    
-    # pt_box_info_1 = get_pt_box_info(tracker_record_1,pt_obj_1)
-    # pt_box_info_2 = get_pt_box_info(tracker_record_2,pt_obj_2)
-    
-    # d = get_STP_in_multi_cameras(pt_box_info_1,pt_box_info_2,associate_dict_c1_c2)
-    
-    # ----- TEST: location predicting in single camera -----
-    # match_based_on_spatial_temperal_prior_test_1(   tracker_record_1,
-                                                    # pt_obj_1,
-                                                    # 30)
-    # match_based_on_spatial_temperal_prior_test_2(pt_box_info_1,pt_obj_1)
-     
-    # ----- TEST: spatial temperal prior in single camera -----
-    # d = get_STP_in_single_camera(pt_box_info_1)
+    fig =plt.figure()
+    ax = fig.gca(projection='3d')
+    ax.plot_surface(X,Y,Z,rstride=3,cstride=3,linewidth=1,antialiased =True)
+    cset = ax.contour(X,Y,Z,zdir='z',offset=-0.15)
 
-    # ----- TEST: 概率计算 1D ----- 
-    # n = 10
-    # obj_nx = Gauss_distribution(n*d['1']['mean_x'],n**2*d['1']['var_x'])
-    # obj_ny = Gauss_distribution(n*d['1']['mean_y'],n**2*d['1']['var_y'])
-    
-    # plt.show()
-    
-    # # obj = Gauss_distribution(d['1']['mean_y'],d['1']['var_y'])
-    # obj = Gauss_distribution(np.float64(0),np.float64(0.2))
-    # # 1D gauss testing
-    # # print(type(d['1']['mean_x']),type(d['1']['var_x']))
+    ax.set_zlim(-0.15,0.2)
+    ax.set_zticks(np.linspace(0,0.2,5))
+    ax.view_init(27,-21)
+    plt.show()
 
+def match_based_on_spatial_temperal_prior_test_1(tracker_record,pt_obj,t_interval=30):
+    '''test location predicting of object,
+    Predict object location in future based on the current object location, movement characteristics and time interval setting
+    Parameters:
+        tracker_record: tracking information
+        pt_obj: perspective transformer object
+        t_interval: time interval(frames)
+    '''
+    print("===== Get in the match_based_on_spatial_temperal_prior_test_1! ===== ")
+    
+    # file path
+    img_root = r'E:\DataSet\trajectory\concatVD\wuqi1B'
+    save_root = r'D:\Project\tensorflow_model\VehicleTracking\data_generator\gen_data\resutls\loc_predicate\Frame20'
+    test_id = '1'
+
+    obj_STP = Single_camera_STP(tracker_record,pt_obj,t_interval)
+    # obj_STP.update_predictor(tracker_record,30)
+       
+    # test on id 1
+    for v,elem in enumerate(obj_STP.perspective_trace[test_id]):
+        if v+t_interval>len(obj_STP.perspective_trace[test_id])-1:
+            break
+        fname_1 = str(elem[1])+'.jpg'
+        fname_2 = str(elem[1]+t_interval)+'.jpg'
+        
+
+        test_x,test_y = obj_STP.perspective_trace[test_id][v+t_interval][0][0],obj_STP.perspective_trace[test_id][v+t_interval][0][1]
+        print("Probability:",obj_STP.get_probability(test_x,test_y,elem[0][0],elem[0][1]))
+        print("Distance:",obj_STP.get_distance(test_x,test_y,elem[0][0],elem[0][1]))
+        p_map = obj_STP.get_probability_map(base_x=elem[0][0],base_y=elem[0][1]) 
+        p_map = cv2.applyColorMap(p_map,cv2.COLORMAP_JET)
+
+        color_p_map = cv2.resize(p_map,(int(pt_obj.transformed_width_for_disp),int(pt_obj.transformed_height_for_disp)))
+
+        color_p_map = cv2.flip(color_p_map,0)   # 0:vertical flip
+        pt_color_p_map = pt_obj.get_inverse_disp_transform(color_p_map)
+        
+        
+        img_1 = cv2.imread(os.path.join(img_root,fname_1))  # current frame
+        img_2 = cv2.imread(os.path.join(img_root,fname_2))  # frame after fixed time interval 
+        diff_img = cv2.absdiff(img_1,img_2)                 # For displaying same object from different frames in one image.
+
+        
+        alpha = 0.5
+        inverse_elem = pt_obj.get_inverse_pred_transform([elem[0]])
+        img_3 = cv2.addWeighted(img_1, alpha, diff_img, 1-alpha, 0)
+        alpha = 0.7
+        img_3 = cv2.addWeighted(img_3, alpha, pt_color_p_map, 1-alpha, 0)
+        
+            
+        cv2.namedWindow('img_3',cv2.WINDOW_NORMAL)
+        cv2.imshow('img_3',img_3)
+        cv2.imwrite(os.path.join(save_root,fname_1),img_3)
+        
+        cv2.waitKey()
+    return
+    
+def match_based_on_spatial_temperal_prior_test_2(tracker_record_1,tracker_record_2,pt_obj_1,pt_obj_2,associate_dict,t_interval=30):
+    '''test location predicting of object,
+    Predict object location in future based on current object location, movement characteristics and time interval setting
+    Parameters:
+        tracker_record_1: Trace information in cam 1(front one);
+        tracker_record_2: Trace information in cam 2(back one);
+        pt_obj_1: perspective transformer object of cam 1;
+        pt_obj_2: perspective transformer object of cam 2;
+        t_interval: time interval(frames)
+    '''
+    print("===== Get in the match_based_on_spatial_temperal_prior_test_2! ===== ")
+    
+    # file path
+    img_root_1 = r'E:\DataSet\trajectory\concatVD\wuqi1B'
+    img_root_2 = r'E:\DataSet\trajectory\concatVD\wuqi2B'
+    save_root = r'D:\Project\tensorflow_model\VehicleTracking\data_generator\gen_data\resutls\loc_predicate_multi'
+ 
+    obj_single_camera_STP_cam_1 = Single_camera_STP(tracker_record_1,pt_obj_1)
+    obj_single_camera_STP_cam_2 = Single_camera_STP(tracker_record_2,pt_obj_2)
+    # print(obj_single_camera_STP_cam_1.perspective_trace)
+    # print(obj_single_camera_STP_cam_1.motion_params_4_each)
+    obj_multi_cameras_STP_c1c2 = Multi_cameras_STP( 
+                                    obj_single_camera_STP_cam_1,
+                                    obj_single_camera_STP_cam_2,
+                                    associate_dict)
+
+    # # ===== TEST:coord_transformer_test =====
+    # coord_transformer_test(obj_multi_cameras_STP_c1c2)
+    # obj_multi_cameras_STP_c1c2.get_start_point_transform()
+    
+    pt_box_info_1 = obj_multi_cameras_STP_c1c2.obj_single_camera_STP_cam_1.perspective_trace
+    pt_box_info_2 = obj_multi_cameras_STP_c1c2.obj_single_camera_STP_cam_2.perspective_trace
+    
+    # Test on object id '1'
+    object_id = '1'
+    
+    for i in range(np.min([len(pt_box_info_1[object_id]),len(pt_box_info_2[object_id])])):
+        f1 = i
+        f2 = 0
+        fname_1 = str(pt_box_info_1[object_id][f1][1])+'.jpg'
+        fname_2 = str(pt_box_info_2[object_id][f2][1])+'.jpg'
+        
+        img_1 = cv2.imread(os.path.join(img_root_1,fname_1))
+        img_2 = cv2.imread(os.path.join(img_root_2,fname_2))
+        
+        cam_1_x = pt_box_info_1[object_id][f1][0][0]
+        cam_1_y = pt_box_info_1[object_id][f1][0][1]
+        
+        cam_2_x = pt_box_info_2[object_id][f2][0][0]
+        cam_2_y = pt_box_info_2[object_id][f2][0][1]
+        
+        t_interval = pt_box_info_2[object_id][f2][1]-pt_box_info_1[object_id][f1][1]
+        
+        print(cam_1_x,cam_1_y)
+        print(cam_2_x,cam_2_y)
+        print(t_interval)
+        # print(obj_multi_cameras_STP_c1c2.starting_point)
+        
+        p_map = obj_multi_cameras_STP_c1c2.get_probability_map(cam_1_x,cam_1_y,t_interval,height=210,width=80)
+        p_map = cv2.applyColorMap(p_map,cv2.COLORMAP_JET)
+        # p=obj_multi_cameras_STP_c1c2.get_probability(cam_2_x,cam_2_y,cam_1_x,cam_1_y,t_interval)
+        # print(p)
+        # dist = obj_multi_cameras_STP_c1c2.get_distance(cam_2_x,cam_2_y,cam_1_x,cam_1_y,t_interval)
+        p_map = cv2.resize(p_map,(int(pt_obj_2.transformed_width_for_disp),int(pt_obj_2.transformed_height_for_disp)))
+        p_map = cv2.flip(p_map,0)   # 0:vertical flip
+        pt_color_p_map = pt_obj_2.get_inverse_disp_transform(p_map)
+        
+        alpha = 0.5
+        img_3 = cv2.addWeighted(img_2, alpha, pt_color_p_map, 1-alpha, 0)
+        
+        img_4 = np.zeros((int(img_2.shape[0]),int(img_2.shape[1]*2),3),np.uint8)
+        img_4[:,:img_1.shape[1],:] = img_1
+        img_4[:,img_1.shape[1]:,:] = img_3
+        
+        cv2.namedWindow('img_1',cv2.WINDOW_NORMAL)
+        cv2.namedWindow('img_2',cv2.WINDOW_NORMAL)
+        cv2.namedWindow('img_4',cv2.WINDOW_NORMAL)
+        
+        cv2.imshow('img_1',img_1)
+        cv2.imshow('img_2',img_2)
+        cv2.imshow('img_4',img_4)
+        
+        cv2.imwrite(os.path.join(save_root,fname_1),img_4)
+        
+        
+        cv2.waitKey()
+    return 
+
+def trace_display_test(tracker_record,obj_id='1'):
+    BBox,BFrame = zip(*tracker_record[obj_id]['list'])
+    Center_BBox = get_box_center(BBox)
+    print(Center_BBox)
+    img = cv2.imread(r'E:\DataSet\trajectory\concatVD\wuqi1B\0.jpg')
+    for elem in Center_BBox:
+        print(elem)
+        cv2.circle(img,(int(elem[0]),int(elem[1])),10,(0,0,255),10)
+    cv2.namedWindow('img_1',cv2.WINDOW_NORMAL)
+    cv2.imshow('img_1',img)
+    cv2.waitKey()
+   
+def coord_transformer_test(obj_multi_cameras_STP):
+    transformers = obj_multi_cameras_STP.get_coord_transformer()
+    print("===== Get in coord_transformer_test！=====")
+    print(transformers['B2F']['y'].predict(obj_multi_cameras_STP.coord_pairs[3]))
+   
+def useless():
+    # ===== TEST: 1D gassian display =====
     # x = np.linspace(-1,1,100)
     # y = obj.get_probability(x)
 
     # plt.plot(x,y,'b-',linewidth=3)
     # plt.show()
-    
-    
-    # ----- TEST: 2D gaussian distribution -----
+
+    # ===== TEST: 2D gaussian display =====
     # X = np.linspace(-1,1,60)
     # Y = np.linspace(-1,1,60)
     # X,Y = np.meshgrid(X,Y)
@@ -643,13 +717,59 @@ if __name__=="__main__":
     # ax.view_init(27,-21)
     # plt.show()
     
-    # ----- TEST: Display gaussian distribution in 3D -----
+    # ===== TEST: 2D gaussian display in 3D effect =====
     # with sns.axes_style("dark"):
         # sns.jointplot(display_x, display_y, kind="kde",space=0)
     # plt.show()
     
     # pt_tracker_record_1 = {}
     # pt_tracker_record_2 = {}
+    pass
+    
+# ========== MAIN FUNCTIONS ===========
+if __name__=="__main__":
+    # cam A
+    device_id = 0
+
+    img_filepath_1 = os.path.join(dataset_root,device_info[device_id][0]) 
+    img_savepath_1 = os.path.join(save_root,device_info[device_id][0])
+    pt_savepath_1 = os.path.join(pt_trans_root,device_info[device_id][2])
+    
+    # cam B
+    associate_device_id = associate_cam[device_id]
+    
+    img_filepath_2 = os.path.join(dataset_root,device_info[associate_device_id][0]) 
+    img_savepath_2 = os.path.join(save_root,device_info[associate_device_id][0])
+    pt_savepath_2 = os.path.join(pt_trans_root,device_info[associate_device_id][2])
+
+    tracker_record_1 = load_tracking_info(img_savepath_1)
+    tracker_record_2 = load_tracking_info(img_savepath_2)
+
+    pt_obj_1 = pt.Perspective_transformer(pt_savepath_1)
+    pt_obj_2 = pt.Perspective_transformer(pt_savepath_2)
+
+    pt_box_info_1 = get_pt_box_info(tracker_record_1,pt_obj_1)
+    pt_box_info_2 = get_pt_box_info(tracker_record_2,pt_obj_2)
+    
+    # # ======= TEST: trace display ======
+    # trace_display_test(tracker_record_1,obj_id='2')
+    
+    # ====== TEST: location predicting ======
+    # match_based_on_spatial_temperal_prior_test_1( tracker_record_1, 
+                                                    # pt_obj_1,
+                                                    # 20)
+    match_based_on_spatial_temperal_prior_test_2(   tracker_record_1,
+                                                    tracker_record_2,
+                                                    pt_obj_1,
+                                                    pt_obj_2,
+                                                    associate_dict_c1_c2,
+                                                    )
+
+    # ====== TEST: Spatial-Temperal Prior (STP) in single camera ======
+    # d = get_STP_in_single_camera(pt_box_info_1)
+    # d = get_STP_in_multi_cameras(pt_box_info_1,pt_box_info_2,associate_dict_c1_c2)
+
+
     
     
     
