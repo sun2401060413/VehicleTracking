@@ -17,14 +17,23 @@ import torch.nn as nn
 import compute_VeRi_dis as dist
 from Model_Wrapper import ResNet_Loader
 
+from Single_camera_track import STP_tracker
+
+# # ===== UTILS FUNCTIONS =====     
 def load_crop_img_list(save_path):
     json_file_path = os.path.join(save_path,'crop_img_info.json')
     with open(json_file_path,'r') as doc:
         data = json.load(doc)
     return data
 
-
-if __name__=="__main__":
+# # ===== CLASS =====
+class MTMC_STP_tracker(object):
+    def __init__(self):
+        pass
+    
+    
+# # ===== TEST FUNCTIONS =====
+def SimiliarityCalculateTest():
     # root path
     dataset_root = r"E:\DataSet\trajectory\concatVD"
 
@@ -45,17 +54,6 @@ if __name__=="__main__":
 
     img_savepath_1 = os.path.join(save_root,cam_1)
     img_savepath_2 = os.path.join(save_root,cam_2)
-    
-    # cmp_1,cmp_2 = get_CVPR_VehReId_data()
-    # plt.figure("Image") #
-    # for i in range(len(cmp_1)):
-        # img_1 = Image.open(os.path.join(cmp_1[i]))
-        # plt.subplot(5,2,2*i+1)
-        # plt.imshow(img_1)
-        # img_2 = Image.open(os.path.join(cmp_2[i]))
-        # plt.subplot(5,2,2*i+2)
-        # plt.imshow(img_2)
-    # plt.show()
     
     load_ckpt = r"D:\Project\tensorflow_model\VehicleTracking\models\model_880_base.ckpt"
     n_layer = 50
@@ -103,6 +101,7 @@ if __name__=="__main__":
     
     plt.show()
     
+def useless():
     # with open(args.query_txt,'r') as f:
         # # query_txt = [q.strip() for q in f.readlines()]
         # # query_txt = query_txt[1:]
@@ -151,4 +150,10 @@ if __name__=="__main__":
     # data1.to_csv(os.path.join(r'E:\DataSet\BoxCars\Reid_dataset','data1.csv'))
     # # doc = open(os.path.join(r'E:\DataSet\BoxCars\Reid_dataset','boxcar.txt'),'w')
     # # print(SimMat,file=doc)
+    pass
+
+
+if __name__=="__main__":
+    # # ===== TEST: Calculate Similiarity test =====
+    # SimiliarityCalculateTest()
     

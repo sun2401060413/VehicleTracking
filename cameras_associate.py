@@ -12,10 +12,9 @@ import json
 import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
 
-from Single_camera_track import IOU_tracker
-from data_generator import load_tracking_info
-from Single_camera_track import get_box_center
-import Perspective_transform as pt
+
+# from Single_camera_track import get_box_center
+
 
 from mpl_toolkits.mplot3d import Axes3D
 import seaborn as sns
@@ -123,29 +122,41 @@ class Single_camera_STP(object):
         self.motion_params_4_all = None
         self.motion_params_4_each = None
         
+        self.prob_alpha_x = 1       # x amplitude multiplier
+        self.prob_alpha_y = 1       # y amplitude multiplier
+        
+        self.var_beta_x = 25   # x range multiplier
+        self.var_beta_y = 1         # y range multiplier
+        
         self.get_motion_params()
         self.nx_predictor = Gauss_distribution(
                                     self.time_interval*self.motion_params_4_all['mean_x'],
-                                    self.time_interval**2*self.motion_params_4_all['var_x'])
+                                    self.time_interval*self.var_beta_x*self.motion_params_4_all['var_x'])
         self.ny_predictor = Gauss_distribution(
                                     self.time_interval*self.motion_params_4_all['mean_y'],
-                                    self.time_interval*self.motion_params_4_all['var_y'])
+                                    self.time_interval*self.var_beta_y*self.motion_params_4_all['var_y'])
+    
+    def version(self):
+        return print("Written by sunzhu, 2019-03-21, version 1.0")
+    
     def get_motion_params(self):
         self.perspective_trace = get_pt_box_info(self.tracking_record,self.perspective_transformer)
         self.distance_dict = get_dist_in_deltaT(self.perspective_trace)
         self.motion_params_4_each,self.motion_params_4_all = get_statistical_paras_of_dist_in_deltaT(self.distance_dict)
         return self.motion_params_4_each,self.motion_params_4_all
         
-    def update_predictor(self,tracking_record=None,time_interval=25):
+    def update_predictor(self,tracking_record=None,time_interval=None):
         if tracking_record is not None:
             self.tracking_record = tracking_record
             self.get_motion_params()
+        if time_interval is not None:
+            self.time_interval = time_interval
         self.nx_predictor = Gauss_distribution(
                                     self.time_interval*self.motion_params_4_all['mean_x'],
-                                    self.time_interval*self.motion_params_4_all['var_x'])
+                                    self.time_interval*self.var_beta_x*self.motion_params_4_all['var_x'])
         self.ny_predictor = Gauss_distribution(
                                     self.time_interval*self.motion_params_4_all['mean_y'],
-                                    self.time_interval*self.motion_params_4_all['var_y'])
+                                    self.time_interval*self.var_beta_y*self.motion_params_4_all['var_y'])
             
     def get_probability_map(self,base_x,base_y,start_x=0,start_y=0,height=300,width=80):
         return get_probability_map(self.nx_predictor,self.ny_predictor,base_x,base_y,start_x,start_y,height,width)
@@ -153,7 +164,10 @@ class Single_camera_STP(object):
     def get_probability(self,x,y,base_x,base_y):
         delta_x = x - base_x 
         delta_y = y - base_y
-        return self.nx_predictor.get_probability(delta_x),self.ny_predictor.get_probability(delta_y)
+        prob_x = self.nx_predictor.get_probability(delta_x)
+        prob_y = self.ny_predictor.get_probability(delta_y)
+        prob_xy = self.prob_alpha_x*prob_x*self.prob_alpha_y*prob_y
+        return prob_x,prob_y,prob_xy
         
     def get_distance(self,x,y,base_x,base_y,alpha=0.5):
         pred_x = base_x+self.time_interval*self.motion_params_4_all['mean_x']
@@ -174,9 +188,18 @@ class Multi_cameras_STP(object):
         self.coord_transformer = None
         self.starting_point = None
         
+        self.prob_alpha_x = 1       # x multiplier for position probability calculating
+        self.prob_alpha_y = 1       # y multiplier for position probability calculating
+        
+        self.var_beta_x = 5         # x range multiplier
+        self.var_beta_y = 1         # y range multiplier
+        
         self.get_coord_transformer()
         self.get_start_point_transform()
         
+    def version(self):
+        return print("Written by sunzhu, 2019-03-21, version 1.0")
+    
     def get_coord_transformer(self):
         self.coord_pairs = get_STP_in_multi_cameras(
                                     self.obj_single_camera_STP_cam_1,
@@ -228,9 +251,9 @@ class Multi_cameras_STP(object):
     
     def get_probability_map(self,base_x,base_y,t_interval=None,height=300,width=80):
         nx_predictor = Gauss_distribution(  t_interval*self.obj_single_camera_STP_cam_1.motion_params_4_all['mean_x'],
-                                            t_interval*5*self.obj_single_camera_STP_cam_1.motion_params_4_all['var_x'])
+                                            t_interval*self.var_beta_x*self.obj_single_camera_STP_cam_1.motion_params_4_all['var_x'])
         ny_predictor = Gauss_distribution(  t_interval*self.obj_single_camera_STP_cam_1.motion_params_4_all['mean_y'],
-                                            t_interval*self.obj_single_camera_STP_cam_1.motion_params_4_all['var_y'])
+                                            t_interval*self.var_beta_y*self.obj_single_camera_STP_cam_1.motion_params_4_all['var_y'])
         # print("starting_points:",self.starting_point[0],self.starting_point[1])
         
         return get_probability_map( nx_predictor,
@@ -247,16 +270,19 @@ class Multi_cameras_STP(object):
         delta_x = trans_x - base_x
         delta_y = trans_y - base_y
 
-        print("delta_x:",delta_x,"delta_y:",delta_y)
+        # print("delta_x:",delta_x,"delta_y:",delta_y)
         nx_predictor = Gauss_distribution(  
                         t_interval*self.obj_single_camera_STP_cam_1.motion_params_4_all['mean_x'],
-                        t_interval*self.obj_single_camera_STP_cam_1.motion_params_4_all['var_x'])
+                        t_interval*self.var_beta_x*self.obj_single_camera_STP_cam_1.motion_params_4_all['var_x'])
         ny_predictor = Gauss_distribution(  
                         t_interval*self.obj_single_camera_STP_cam_1.motion_params_4_all['mean_y'],
-                        t_interval*0.5*self.obj_single_camera_STP_cam_1.motion_params_4_all['var_y'])
-        print('p_x',nx_predictor.get_probability(delta_x))      
-        print('p_y',ny_predictor.get_probability(delta_y))                       
-        return nx_predictor.get_probability(delta_x),ny_predictor.get_probability(delta_y)
+                        t_interval*self.var_beta_y*self.obj_single_camera_STP_cam_1.motion_params_4_all['var_y'])
+        # print('p_x',nx_predictor.get_probability(delta_x))      
+        # print('p_y',ny_predictor.get_probability(delta_y))
+        prob_x = nx_predictor.get_probability(delta_x)
+        prob_y = ny_predictor.get_probability(delta_y)
+        prob_xy = self.prob_alpha_x*prob_x*prob_alpha_y*prob_y
+        return prob_x,prob_y,prob_xy
         
     def get_distance(self,x,y,base_x,base_y,t_interval=None,alpha=0.5):
         trans_x = self.coord_transformer['B2F']['x'].predict([[x]])[0][0]
@@ -344,7 +370,6 @@ def get_STP_in_multi_cameras(obj_single_camera_STP_cam_1,obj_single_camera_STP_c
     pt_trace_1 = obj_single_camera_STP_cam_1.perspective_trace
     pt_trace_2 = obj_single_camera_STP_cam_2.perspective_trace
     
-   
     # # ===== Method 1: Predict location using motion parameters for all objects =====
     # objs_associate_info = []
     # for k in associate_dict:
@@ -535,11 +560,12 @@ def match_based_on_spatial_temperal_prior_test_1(tracker_record,pt_obj,t_interva
     '''
     print("===== Get in the match_based_on_spatial_temperal_prior_test_1! ===== ")
     
-    # file path
-    img_root = r'E:\DataSet\trajectory\concatVD\wuqi1B'
-    save_root = r'D:\Project\tensorflow_model\VehicleTracking\data_generator\gen_data\resutls\loc_predicate\Frame20'
     test_id = '1'
+    # file path
+    img_root = os.path.join(dataset_root,device_info[int(test_id)-1][0])
+    save_root = r'D:\Project\tensorflow_model\VehicleTracking\data_generator\gen_data\resutls\loc_predicate\Frame20'
 
+    
     obj_STP = Single_camera_STP(tracker_record,pt_obj,t_interval)
     # obj_STP.update_predictor(tracker_record,30)
        
@@ -577,7 +603,7 @@ def match_based_on_spatial_temperal_prior_test_1(tracker_record,pt_obj,t_interva
             
         cv2.namedWindow('img_3',cv2.WINDOW_NORMAL)
         cv2.imshow('img_3',img_3)
-        cv2.imwrite(os.path.join(save_root,fname_1),img_3)
+        # cv2.imwrite(os.path.join(save_root,fname_1),img_3)
         
         cv2.waitKey()
     return
@@ -601,6 +627,7 @@ def match_based_on_spatial_temperal_prior_test_2(tracker_record_1,tracker_record
  
     obj_single_camera_STP_cam_1 = Single_camera_STP(tracker_record_1,pt_obj_1)
     obj_single_camera_STP_cam_2 = Single_camera_STP(tracker_record_2,pt_obj_2)
+    
     # print(obj_single_camera_STP_cam_1.perspective_trace)
     # print(obj_single_camera_STP_cam_1.motion_params_4_each)
     obj_multi_cameras_STP_c1c2 = Multi_cameras_STP( 
@@ -616,11 +643,11 @@ def match_based_on_spatial_temperal_prior_test_2(tracker_record_1,tracker_record
     pt_box_info_2 = obj_multi_cameras_STP_c1c2.obj_single_camera_STP_cam_2.perspective_trace
     
     # Test on object id '1'
-    object_id = '1'
+    object_id = '3'
     
     for i in range(np.min([len(pt_box_info_1[object_id]),len(pt_box_info_2[object_id])])):
         f1 = i
-        f2 = 0
+        f2 = i
         fname_1 = str(pt_box_info_1[object_id][f1][1])+'.jpg'
         fname_2 = str(pt_box_info_2[object_id][f2][1])+'.jpg'
         
@@ -656,16 +683,15 @@ def match_based_on_spatial_temperal_prior_test_2(tracker_record_1,tracker_record
         img_4[:,:img_1.shape[1],:] = img_1
         img_4[:,img_1.shape[1]:,:] = img_3
         
-        cv2.namedWindow('img_1',cv2.WINDOW_NORMAL)
-        cv2.namedWindow('img_2',cv2.WINDOW_NORMAL)
+        # cv2.namedWindow('img_1',cv2.WINDOW_NORMAL)
+        # cv2.namedWindow('img_2',cv2.WINDOW_NORMAL)
         cv2.namedWindow('img_4',cv2.WINDOW_NORMAL)
         
-        cv2.imshow('img_1',img_1)
-        cv2.imshow('img_2',img_2)
+        # cv2.imshow('img_1',img_1)
+        # cv2.imshow('img_2',img_2)
         cv2.imshow('img_4',img_4)
         
         cv2.imwrite(os.path.join(save_root,fname_1),img_4)
-        
         
         cv2.waitKey()
     return 
@@ -728,6 +754,7 @@ def useless():
     
 # ========== MAIN FUNCTIONS ===========
 if __name__=="__main__":
+    print('==== Cameras_associate ====')
     # cam A
     device_id = 0
 
@@ -742,17 +769,19 @@ if __name__=="__main__":
     img_savepath_2 = os.path.join(save_root,device_info[associate_device_id][0])
     pt_savepath_2 = os.path.join(pt_trans_root,device_info[associate_device_id][2])
 
+    from data_generator import load_tracking_info
     tracker_record_1 = load_tracking_info(img_savepath_1)
     tracker_record_2 = load_tracking_info(img_savepath_2)
-
+    
+    import Perspective_transform as pt
     pt_obj_1 = pt.Perspective_transformer(pt_savepath_1)
     pt_obj_2 = pt.Perspective_transformer(pt_savepath_2)
-
+    
     pt_box_info_1 = get_pt_box_info(tracker_record_1,pt_obj_1)
     pt_box_info_2 = get_pt_box_info(tracker_record_2,pt_obj_2)
     
     # # ======= TEST: trace display ======
-    # trace_display_test(tracker_record_1,obj_id='2')
+    # trace_display_test(tracker_record_1,obj_id='4')
     
     # ====== TEST: location predicting ======
     # match_based_on_spatial_temperal_prior_test_1( tracker_record_1, 
@@ -768,10 +797,4 @@ if __name__=="__main__":
     # ====== TEST: Spatial-Temperal Prior (STP) in single camera ======
     # d = get_STP_in_single_camera(pt_box_info_1)
     # d = get_STP_in_multi_cameras(pt_box_info_1,pt_box_info_2,associate_dict_c1_c2)
-
-
-    
-    
-    
-    
-        
+ 

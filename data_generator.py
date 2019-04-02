@@ -46,7 +46,9 @@ def get_tracking_info(device_id):
         filename = str(row['fps'])+'.jpg'
         img_filename = os.path.join(img_filepath,filename)
         img = cv2.imread(img_filename)
-        tracker.draw_trajectory(img)
+        cv2.namedWindow('img',cv2.WINDOW_NORMAL)
+        cv2.imshow('img',tracker.draw_trajectory(img))
+        cv2.waitKey(1)
     tracker.save_data(img_savepath)
     
 def get_crop_img(device_id):
