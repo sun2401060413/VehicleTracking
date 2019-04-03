@@ -1,6 +1,6 @@
 '''
 MCT: Multi cameras tracking.
-Multi-objects tracking with multi-cameras.
+Multi-objects tracking in multi-cameras.
 written by sunzhu, 2019-03-20, version 1.0
 '''
 
@@ -17,7 +17,8 @@ import torch.nn as nn
 import compute_VeRi_dis as dist
 from Model_Wrapper import ResNet_Loader
 
-from Single_camera_track import STP_tracker
+# from Single_camera_track import STP_tracker
+
 
 # # ===== UTILS FUNCTIONS =====     
 def load_crop_img_list(save_path):
@@ -27,12 +28,164 @@ def load_crop_img_list(save_path):
     return data
 
 # # ===== CLASS =====
-class MTMC_STP_tracker(object):
-    def __init__(self):
+class Cameras_Topology(object):
+    '''Topology of Cameras'''
+    def __init__(self,trackers_dict={},STP_dict={},associate_dict={}):
+        '''
+        trackers_dict: tracker with CAM_id
+        STP_dict: spatial-temporal-prior between CAM_id and next_CAM_id 
+        associate_dict: prev_CAM_id: CAM_id
+        '''
+        self.trackers_dict = trackers_dict
+        self.STP_dict = STP_dict
+        self.associate_dict = associate_dict
+        
+    def add_new_element(self,obj_tracker,obj_STP,id,prev_id=None):
+        self.trackers_dict[id] = tracker
+        if prev_id is not None:
+            self.STP_dict[prev_id] = obj_STP
+            self.associate_dict[prev_id] = id       # record next cam id
+        self.trackers_dict[id] = obj_tracker
+        
+    def get_reverse_associate_dict(self):
+        '''Find prev cam id'''
+        return {self.associate_dict[elem]:elem for elem in self.associate_dict}
+
+class MCT_STP_tracker(object):
+    def __init__(self,
+                frame_space_dist = 100,
+                obj_cameras_topology = None,
+                match_mode = 'Prob'):
+        # time range
+        self.frame_space_dist = frame_space_dist
+
+        
+        # Single camera tracker
+        self.obj_STP_tracker = obj_STP_tracker
+        # Multi cameras 
+        self.obj_Multi_cameras_STP = obj_Multi_cameras_STP
+        
+        self.match_mode = match_mode
+        
+        # save vehicle object out from cam_1
+        self.objects_pool = {}
+        
+        # threshold of tracking
+        self.thresh_probability = 0.001
+        self.thresh_distance = 5
+        
+        # image information
+        self.img_height = 1080
+        self.img_width = 1920
+        self.obj_pool_display_height = 100
+        self.obj_pool_display_width = 100
+        self.obj_pool_display_channel = 3
+        
+        # # display setting
+        # self.display_monitor_region = False
+        
+    def version(self):
+        return print("===== Written by sunzhu, 2019-04-03, Version 1.0 =====")
+        
+    def get_available_id(self):
+        pass
+        
+    def get_available_color(self):
+        pass
+        
+    def isTrackFinish(self,frame):
+        pass
+        
+    def update(self,box,img=None):
+        pass
+        
+    def match(self,box,frame):
+        pass
+
+    def rank(self,objs_list):
         pass
     
     
 # # ===== TEST FUNCTIONS =====
+def Devices_Topology_test():
+    from data_generator import get_files_info
+    obj_data_generator = get_files_info()
+    
+    time_interval = 25
+    # file path 1
+    file_dict_1 = obj_data_generator.get_filepath(0)
+    file_dict_2 = obj_data_generator.get_filepath(1)
+        
+    from data_generator import load_tracking_info
+    tracker_record_1 = load_tracking_info(file_dict_1['tracking_info_filepath'])
+    tracker_record_2 = load_tracking_info(file_dict_2['tracking_info_filepath'])
+    
+    from Perspective_transform import Perspective_transformer
+    pt_obj_1 = Perspective_transformer(file_dict_1['pt_savepath'])
+    pt_obj_2 = Perspective_transformer(file_dict_2['pt_savepath'])
+
+    from cameras_associate import Single_camera_STP
+    STP_Predictor_1 = Single_camera_STP(
+                        tracker_record_1,
+                        pt_obj_1,
+                        time_interval = time_interval)
+    STP_Predictor_1.var_beta_x = int(25*25/time_interval)
+    STP_Predictor_1.var_beta_y = int(25/time_interval)+1
+    STP_Predictor_1.update_predictor()            
+                        
+    STP_Predictor_2 = Single_camera_STP(
+                        tracker_record_2,
+                        pt_obj_2,
+                        time_interval = time_interval)
+    STP_Predictor_2.var_beta_x = int(25*25/time_interval)
+    STP_Predictor_2.var_beta_y = int(25/time_interval)+1
+    STP_Predictor_2.update_predictor()        
+    
+    from Single_camera_track import STP_tracker
+    obj_tracker_1 = STP_tracker(frame_space_dist=50,obj_STP=STP_Predictor_1)
+    obj_tracker_1.match_mode = 'Prob'
+    obj_tracker_1.display_monitor_region = True
+    obj_tracker_2 = STP_tracker(frame_space_dist=50,obj_STP=STP_Predictor_2)
+    obj_tracker_2.region_top = 250
+    obj_tracker_2.match_mode = 'Prob'
+    obj_tracker_2.display_monitor_region = True
+    
+    from data_generator import two_cameras_simulator    # Just for test
+    cameras_simulator = two_cameras_simulator(
+                            file_dict_1['box_info_filepath'],
+                            file_dict_2['box_info_filepath'],
+                            file_dict_1['img_filepath'],
+                            file_dict_2['img_filepath'])
+    datagen = cameras_simulator.data_gen(time_interval=time_interval)
+    try:
+        while(True):
+            img_1,img_2,d_1,d_2 = datagen.__next__()
+            
+            if d_1 is not None:
+                for elem in d_1:
+                    cp_img = img_1[elem[1]:elem[3],elem[0]:elem[2]].copy()
+                    obj_tracker_1.update(elem,cp_img)
+            if d_2 is not None:
+                for elem in d_2:
+                    cp_img = img_2[elem[1]:elem[3],elem[0]:elem[2]].copy()
+                    obj_tracker_2.update(elem,cp_img)
+            tray_img_1 = obj_tracker_1.draw_trajectory(img_1)
+            tray_img_2 = obj_tracker_2.draw_trajectory(img_2)
+            
+            cv2.namedWindow('img_1',cv2.WINDOW_NORMAL)
+            cv2.namedWindow('img_2',cv2.WINDOW_NORMAL)
+            cv2.imshow('img_1',tray_img_1)
+            cv2.imshow('img_2',tray_img_2)
+            cv2.waitKey()
+    except StopIteration:
+        pass
+    
+    # obj_cameras_topology = Cameras_Topology()
+    return
+
+def MCT_STP_tracker_test():
+    return
+
 def SimiliarityCalculateTest():
     # root path
     dataset_root = r"E:\DataSet\trajectory\concatVD"
@@ -156,4 +309,5 @@ def useless():
 if __name__=="__main__":
     # # ===== TEST: Calculate Similiarity test =====
     # SimiliarityCalculateTest()
-    
+    # # ===== TEST:Devices_Topology_test =====
+    Devices_Topology_test()

@@ -1,6 +1,6 @@
 '''
 SCT: Single camera tracking.
-Multi-objects tracking with single camera.
+Multi-objects tracking in single camera.
 written by sunzhu, 2019-03-19, version 1.0
 '''
 
@@ -325,18 +325,18 @@ class STP_tracker(object):
     def match(self,box,frame):
         possible_obj_list = []
         
-        # root path
-        dataset_root = r"E:\DataSet\trajectory\concatVD\wuqi1B"
-        img_current = cv2.imread(os.path.join(dataset_root,str(frame)+'.jpg'))
-        if img_current is not None:
-            # print(img_current.shape)
-            pass
-        else:
-            return
-        obj_img = img_current[box[1]:box[3],box[0]:box[2]].copy()
-        # print(obj_img.shape)
-        # cv2.namedWindow('img_current',cv2.WINDOW_NORMAL)
-        cv2.imshow("obj_img",obj_img)
+        # # root path
+        # # dataset_root = r"E:\DataSet\trajectory\concatVD\wuqi2B"
+        # # img_current = cv2.imread(os.path.join(dataset_root,str(frame)+'.jpg'))
+        # # if img_current is not None:
+            # # # print(img_current.shape)
+            # # pass
+        # # else:
+            # # return
+        # obj_img = img_current[box[1]:box[3],box[0]:box[2]].copy()
+        # # print(obj_img.shape)
+        # # cv2.namedWindow('img_current',cv2.WINDOW_NORMAL)
+        # cv2.imshow("obj_img",obj_img)
         for k,v in self.objects_pool.items():
             cmp_id = k
             cmp_locat = v.last_box
@@ -538,7 +538,7 @@ def STP_tracker_test():
         ['wuqi4B','wuqiyuce4.csv','ROI_cam_4_transformer.json'],
     ]
     # test cam
-    device_id = 0
+    device_id = 1
     
     # file path
     img_filepath = os.path.join(dataset_root,device_info[device_id][0])
@@ -548,7 +548,7 @@ def STP_tracker_test():
         os.mkdir(img_savepath)
     pt_savepath = os.path.join(pt_trans_root,device_info[device_id][2])
     
-    time_interval = 25
+    time_interval = 5
     
     trace_record = []
     
