@@ -143,6 +143,38 @@ class TrackersArray(object):
                 hist,run = self.multi_tracker_dict[elem].update([frame_count])
             pass
         
+    def draw_trajectory(self,img_dict=None,box_dict=None,mode='single'):
+        new_img_dict = {}
+        if mode == 'single':
+            for elem in img_dict:
+                new_img_dict[elem] = self.trackers_dict[elem].draw_trajectory(img_dict[elem])
+        elif mode == 'multi':
+            for elem in img_dict:
+                for obj in self.trackers_dict[elem].objects_pool:
+                    idx = self.get_global_id(elem,self.trackers_dict[elem].objects_pool[obj].id)
+                    box = self.trackers_dict[elem].objects_pool[obj].last_box
+                    new_img_dict[elem] = cv2.putText(img_dict[elem],"ID:{}".format(idx),(box[2],box[3]),cv2.FONT_HERSHEY_COMPLEX,2,self.trackers_dict[elem].objects_pool[obj].color,5)
+                    bx_list = []
+                    for bx in self.trackers_dict[elem].objects_pool[obj].list:
+                        bx_list.append(get_box_center(bx[0],mode="bottom"))
+                    for i in range(len(bx_list)-1):
+                        new_img_dict[elem] = cv2.line(new_img_dict[elem],bx_list[i],bx_list[i+1],self.trackers_dict[elem].objects_pool[obj].color,5)
+
+        return new_img_dict
+        
+    def get_global_id(self,device_id,obj_id):
+        output_id = None
+        
+        # Recursive condition
+        if self.get_reverse_associate_dict().__contains__(device_id):
+            output_id = self.get_global_id(
+                self.get_reverse_associate_dict()[device_id],
+                self.multi_tracker_dict[self.get_reverse_associate_dict()[device_id]].get_reverse_mapping_recorder()[obj_id]
+            )
+        else:
+            output_id = obj_id
+        return output_id
+    
     def get_reverse_associate_dict(self):
         '''Find prev cam id'''
         return {self.associate_dict[elem]:elem for elem in self.associate_dict}
@@ -169,6 +201,7 @@ class MCT_STP_tracker(object):
         self.objects_pool = {}
         # 
         self.mapping_recorder = {}
+        self.reverse_mapping_recorder = {}
         self.cam2_new_object_id = None
         
         # threshold of tracking
@@ -220,6 +253,8 @@ class MCT_STP_tracker(object):
             if matched_obj and self.cam2_new_object_id is not None:
                 # self.objects_pool[matched_obj.id].update(box_info,frame_info)
                 self.mapping_recorder[matched_obj.id] = self.cam2_new_object_id
+                self.get_reverse_mapping_recorder()
+                
         return self.isTrackFinish(box[4]),self.objects_pool
         
     def match(self,box,frame):
@@ -338,6 +373,10 @@ class MCT_STP_tracker(object):
 
         return img_3
             
+    def get_reverse_mapping_recorder(self):
+        self.reverse_mapping_recorder = {self.mapping_recorder[elem]:elem for elem in self.mapping_recorder}
+        return self.reverse_mapping_recorder
+        
 # # ===== TEST FUNCTIONS =====
 def TrackersArray_test():
     from data_generator import get_files_info
@@ -440,29 +479,23 @@ def TrackersArray_test():
                                 frame_count = frame_count
                                 )
             frame_count+=time_interval
-            # if d_1 is not None:
-                # for elem in d_1:
-                    # cp_img = img_1[elem[1]:elem[3],elem[0]:elem[2]].copy()
-                    # hist_objs_1,_= obj_TrackersArray.trackers_dict[0].update(elem,cp_img)
-            # if d_2 is not None:
-                # for elem in d_2:
-                    # cp_img = img_2[elem[1]:elem[3],elem[0]:elem[2]].copy()
-                    # obj_TrackersArray.trackers_dict[1].update(elem,cp_img)
-            tray_img_1 = obj_TrackersArray.trackers_dict[0].draw_trajectory(img_1)
-            tray_img_2 = obj_TrackersArray.trackers_dict[1].draw_trajectory(img_2)
             
-            obj_pool_img_1 = obj_TrackersArray.multi_tracker_dict[0].draw_objects_pool()
-            if obj_pool_img_1 is not None:
-                cv2.imshow('obj_pool_img_1',obj_pool_img_1)
-            
-            cv2.namedWindow('img_1',cv2.WINDOW_NORMAL)
-            cv2.namedWindow('img_2',cv2.WINDOW_NORMAL)
-            cv2.imshow('img_1',tray_img_1)
-            cv2.imshow('img_2',tray_img_2)
-            cv2.waitKey(1)
+            # # ==== Draw object trajectory in single-camera =====
+            new_img_dict = obj_TrackersArray.draw_trajectory(img_dict=img_dict,mode='multi')
+            # new_img_dict = obj_TrackersArray.draw_trajectory(img_dict)
+            for elem in new_img_dict:
+                cv2.namedWindow('img_'+str(elem),cv2.WINDOW_NORMAL)
+                cv2.imshow('img_'+str(elem),new_img_dict[elem])
+                cv2.waitKey(1)
+
     except StopIteration:
         pass
-    
+    print("===============")
+    print(obj_TrackersArray.get_global_id(1,0))
+    print(obj_TrackersArray.get_global_id(1,1))
+    print(obj_TrackersArray.get_global_id(1,2))
+    print(obj_TrackersArray.get_global_id(1,3))
+    print(obj_TrackersArray.get_global_id(1,4))
     for elem in obj_TrackersArray.multi_tracker_dict:
         print(obj_TrackersArray.multi_tracker_dict[elem].mapping_recorder)
     return
