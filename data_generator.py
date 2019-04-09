@@ -118,7 +118,7 @@ def get_frame_data(data,frame_id):
     if slice_data.empty:
         frame_data = None
     else:
-        frame_data = zip(*[slice_data['x1'],slice_data['y1'],slice_data['x2'],slice_data['y2'],slice_data['fps']])
+        frame_data = list(zip(*[slice_data['x1'],slice_data['y1'],slice_data['x2'],slice_data['y2'],slice_data['fps']]))
     return frame_data   # output tuple
     
 def load_tracking_info(savepath):

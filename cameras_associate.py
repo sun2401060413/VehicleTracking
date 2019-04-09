@@ -177,8 +177,8 @@ class Single_camera_STP(object):
 
 class Multi_cameras_STP(object):
     def __init__(   self,
-                    obj_single_camera_STP_cam_1,
-                    obj_single_camera_STP_cam_2,
+                    obj_single_camera_STP_cam_1 = None,
+                    obj_single_camera_STP_cam_2 = None,
                     associate_dict = None):
         self.obj_single_camera_STP_cam_1 = obj_single_camera_STP_cam_1
         self.obj_single_camera_STP_cam_2 = obj_single_camera_STP_cam_2
@@ -281,7 +281,7 @@ class Multi_cameras_STP(object):
         # print('p_y',ny_predictor.get_probability(delta_y))
         prob_x = nx_predictor.get_probability(delta_x)
         prob_y = ny_predictor.get_probability(delta_y)
-        prob_xy = self.prob_alpha_x*prob_x*prob_alpha_y*prob_y
+        prob_xy = self.prob_alpha_x*prob_x*self.prob_alpha_y*prob_y
         return prob_x,prob_y,prob_xy
         
     def get_distance(self,x,y,base_x,base_y,t_interval=None,alpha=0.5):
@@ -643,7 +643,7 @@ def match_based_on_spatial_temperal_prior_test_2(tracker_record_1,tracker_record
     pt_box_info_2 = obj_multi_cameras_STP_c1c2.obj_single_camera_STP_cam_2.perspective_trace
     
     # Test on object id '1'
-    object_id = '3'
+    object_id = '0'
     
     for i in range(np.min([len(pt_box_info_1[object_id]),len(pt_box_info_2[object_id])])):
         f1 = i
@@ -669,8 +669,8 @@ def match_based_on_spatial_temperal_prior_test_2(tracker_record_1,tracker_record
         
         p_map = obj_multi_cameras_STP_c1c2.get_probability_map(cam_1_x,cam_1_y,t_interval,height=210,width=80)
         p_map = cv2.applyColorMap(p_map,cv2.COLORMAP_JET)
-        # p=obj_multi_cameras_STP_c1c2.get_probability(cam_2_x,cam_2_y,cam_1_x,cam_1_y,t_interval)
-        # print(p)
+        p=obj_multi_cameras_STP_c1c2.get_probability(cam_2_x,cam_2_y,cam_1_x,cam_1_y,t_interval)
+        print(p)
         # dist = obj_multi_cameras_STP_c1c2.get_distance(cam_2_x,cam_2_y,cam_1_x,cam_1_y,t_interval)
         p_map = cv2.resize(p_map,(int(pt_obj_2.transformed_width_for_disp),int(pt_obj_2.transformed_height_for_disp)))
         p_map = cv2.flip(p_map,0)   # 0:vertical flip

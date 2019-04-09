@@ -6,10 +6,10 @@ import cv2
 import os
 import glob
 
-img_root = r"D:\Project\tensorflow_model\VehicleTracking\data_generator\gen_data\resutls\single_stp_tracking\wuqi1B\25frame"
-video_root = r"D:\Project\tensorflow_model\VehicleTracking\data_generator\gen_data\resutls\single_stp_tracking\wuqi1B\25frame"
+img_root = r"D:\Project\tensorflow_model\VehicleTracking\data_generator\gen_data\resutls\loc_predicate_multi\12f"
+video_root = r"D:\Project\tensorflow_model\VehicleTracking\data_generator\gen_data\resutls\loc_predicate_multi\12f"
 
-def VideoMaker(input_root,output_root,height=1080,width=1920,fps=3):
+def VideoMaker(input_root,output_root,height=1080,width=1920,fps=5):
     # Four-Character Codes
     fourcc = cv2.VideoWriter_fourcc('X','V','I','D')
     videoWriter = cv2.VideoWriter(os.path.join(output_root,'trace.mp4'), fourcc, fps, (width,height))

@@ -64,7 +64,7 @@ class vehicle_object(object):
         
     def set_first_frame(self,box=None,frame=None,img=None):
         self.first_box = box
-        self.frist_frame = frame
+        self.first_frame = frame
         self.first_img = img
         
     def update(self,box,frame,img=None):
@@ -251,6 +251,9 @@ class STP_tracker(object):
         self.objects_pool = {}
         self.objects_count = 0
         
+        self.last_append_id = None
+        self.new_object_append_status = False
+        
         # threshvalue for tracking
         self.frame_space_dist = frame_space_dist    # ignore the object with long time interval
         self.region_top = region_top                # ignore the object outside the certain region
@@ -269,7 +272,7 @@ class STP_tracker(object):
         self.img_height = 1080
         self.img_width = 1920
         self.obj_pool_display_height = 100
-        self.obj_pool_display_width = 100
+        self.obj_pool_display_width = 50
         self.obj_pool_display_channel = 3
         
         # display setting
@@ -306,21 +309,26 @@ class STP_tracker(object):
         return del_id_dict
         
     def update(self,box,img=None):
+        if len(box)==1:     # Consider the conditions that the box is empty
+            return self.isTrackFinish(box[0]),self.objects_pool
         box_info = [box[0],box[1],box[2],box[3]]
+        self.new_object_append_status = False
         if self.isBoxInRegion(box_info):
             frame_info = box[4]
             matched_obj = self.match(box_info,frame_info)
-            print(matched_obj)
+            # print(matched_obj)
             if matched_obj:
                 self.objects_pool[matched_obj.id].update(box_info,frame_info)
             else:
                 obj_id = self.get_available_id()
                 obj = vehicle_object(obj_id)                # create a new vehicle object
-                obj.set_first_frame(box_info,frame_info,img)
+                self.last_append_id = obj_id
+                self.new_object_append_status = True
+                obj.set_first_frame(box=box_info,frame=frame_info,img=img)
                 obj.set_color(self.get_available_color(obj_id))  # set color for displaying
                 obj.update(box_info,frame_info)
                 self.objects_pool[obj_id] = obj
-        return self.isTrackFinish(box[4])
+        return self.isTrackFinish(box[4]),self.objects_pool
         
     def match(self,box,frame):
         possible_obj_list = []
@@ -416,20 +424,42 @@ class STP_tracker(object):
                     ,cv2.FONT_HERSHEY_COMPLEX,2,v.color,5)
         return img
             
-    def draw_objects_pool(self):
-        if len(self.objects_pool)>0:
-            img_height = self.obj_pool_display_height
-            img_width = self.obj_pool_display_width*len(self.objects_pool)
-            disp_objs_pool_img = np.zeros((img_width,img_height,self.obj_pool_display_channel),np.uint8)
-            obj_count = 0
-            for k,v in self.objects_pool.items():
-                chosen_img = cv2.resize(v.first_img,(self.obj_pool_display_width,self.obj_pool_display_height))
-                disp_objs_pool_img[ self.obj_pool_display_width*obj_count:self.obj_pool_display_width*(obj_count+1),0:self.obj_pool_display_height] = chosen_img
-                cv2.putText(disp_objs_pool_img,"ID:{}".format(v.id),(0,self.obj_pool_display_height*(obj_count+1)-3),cv2.FONT_HERSHEY_SIMPLEX,1,v.color,2)
-                obj_count += 1
-            return disp_objs_pool_img
+    def draw_objects_pool(self,mode='vertical',set_range=-1):
+        if mode == 'h':
+            if len(self.objects_pool)>0:
+                img_width = self.obj_pool_display_width
+                if set_range > -1:
+                    img_height = set_range
+                else:
+                    img_height = self.obj_pool_display_height*len(self.objects_pool)
+                disp_objs_pool_img = np.zeros((img_height,img_width,self.obj_pool_display_channel),np.uint8)
+                
+                obj_count = 0
+                for k,v in self.objects_pool.items():
+                    chosen_img = cv2.resize(v.first_img,(self.obj_pool_display_width,self.obj_pool_display_height))
+                    disp_objs_pool_img[ self.obj_pool_display_height*obj_count:self.obj_pool_display_height*(obj_count+1),0:self.obj_pool_display_width] = chosen_img
+                    cv2.putText(disp_objs_pool_img,"ID:{}".format(v.id),(0,self.obj_pool_display_height*(obj_count+1)-3),cv2.FONT_HERSHEY_SIMPLEX,1,v.color,2)
+                    obj_count += 1
+                return disp_objs_pool_img
+            else:
+                return None
         else:
-            return None
+            if len(self.objects_pool)>0:
+                img_height = self.obj_pool_display_height
+                if set_range > -1:
+                    img_height = set_range
+                else:
+                    img_width = self.obj_pool_display_width*len(self.objects_pool)
+                disp_objs_pool_img = np.zeros((img_height,img_width,self.obj_pool_display_channel),np.uint8)
+                obj_count = 0
+                for k,v in self.objects_pool.items():
+                    chosen_img = cv2.resize(v.first_img,(self.obj_pool_display_width,self.obj_pool_display_height))
+                    disp_objs_pool_img[ 0:self.obj_pool_display_height,obj_count*self.obj_pool_display_width:(obj_count+1)*self.obj_pool_display_width] = chosen_img
+                    cv2.putText(disp_objs_pool_img,"ID:{}".format(v.id),(self.obj_pool_display_width*(obj_count),self.obj_pool_display_height-3),cv2.FONT_HERSHEY_SIMPLEX,1,v.color,2)
+                    obj_count += 1
+                return disp_objs_pool_img
+            else:
+                return None
             
     def draw_color_probability_map(self,img_current,pt_base_center_x,pt_base_center_y,alpha=0.5):
         # probability color map
