@@ -272,7 +272,7 @@ class STP_tracker(object):
         self.img_height = 1080
         self.img_width = 1920
         self.obj_pool_display_height = 100
-        self.obj_pool_display_width = 50
+        self.obj_pool_display_width = 100
         self.obj_pool_display_channel = 3
         
         # display setting
@@ -297,7 +297,7 @@ class STP_tracker(object):
         del_id_list = []
         for elem in self.objects_pool:
             # print(elem,frame,self.objects_pool[elem].last_frame)
-            if (frame - self.objects_pool[elem].last_frame) > self.frame_space_dist:
+            if (frame - self.objects_pool[elem].last_frame) > self.frame_space_dist or self.objects_pool[elem].update_status == False:
                 self.objects_pool[elem].update_status = False
                 del_id_list.append(elem)
                 
@@ -313,7 +313,7 @@ class STP_tracker(object):
             return self.isTrackFinish(box[0]),self.objects_pool
         box_info = [box[0],box[1],box[2],box[3]]
         self.new_object_append_status = False
-        if self.isBoxInRegion(box_info):
+        if self.isBoxInRegion(box_info) == 0:
             frame_info = box[4]
             matched_obj = self.match(box_info,frame_info)
             # print(matched_obj)
@@ -328,6 +328,11 @@ class STP_tracker(object):
                 obj.set_color(self.get_available_color(obj_id))  # set color for displaying
                 obj.update(box_info,frame_info)
                 self.objects_pool[obj_id] = obj
+        if self.isBoxInRegion(box_info) == 1:
+            frame_info = box[4]
+            matched_obj = self.match(box_info,frame_info)
+            if matched_obj:
+                self.objects_pool[matched_obj.id].update_status = False
         return self.isTrackFinish(box[4]),self.objects_pool
         
     def match(self,box,frame):
@@ -404,9 +409,11 @@ class STP_tracker(object):
             Note: In vertical direction, we take the box bottom as a reference to check the present of object.
         '''
         if box[0]>self.region_left and box[2]<self.img_width-self.region_right and box[3]>self.region_top and box[3]<self.img_height-self.region_bottom:
-            return True
-        else:
-            return False
+            return 0
+        elif box[3]<self.region_top:
+            return 1
+        elif box[3]>self.img_height-self.region_bottom:
+            return -1
       
     def draw_trajectory(self,img):
         self.draw_objects_pool()
@@ -424,42 +431,25 @@ class STP_tracker(object):
                     ,cv2.FONT_HERSHEY_COMPLEX,2,v.color,5)
         return img
             
-    def draw_objects_pool(self,mode='vertical',set_range=-1):
-        if mode == 'h':
-            if len(self.objects_pool)>0:
-                img_width = self.obj_pool_display_width
-                if set_range > -1:
-                    img_height = set_range
-                else:
-                    img_height = self.obj_pool_display_height*len(self.objects_pool)
-                disp_objs_pool_img = np.zeros((img_height,img_width,self.obj_pool_display_channel),np.uint8)
-                
-                obj_count = 0
-                for k,v in self.objects_pool.items():
-                    chosen_img = cv2.resize(v.first_img,(self.obj_pool_display_width,self.obj_pool_display_height))
-                    disp_objs_pool_img[ self.obj_pool_display_height*obj_count:self.obj_pool_display_height*(obj_count+1),0:self.obj_pool_display_width] = chosen_img
-                    cv2.putText(disp_objs_pool_img,"ID:{}".format(v.id),(0,self.obj_pool_display_height*(obj_count+1)-3),cv2.FONT_HERSHEY_SIMPLEX,1,v.color,2)
-                    obj_count += 1
-                return disp_objs_pool_img
-            else:
-                return None
-        else:
-            if len(self.objects_pool)>0:
-                img_height = self.obj_pool_display_height
-                if set_range > -1:
-                    img_height = set_range
-                else:
-                    img_width = self.obj_pool_display_width*len(self.objects_pool)
-                disp_objs_pool_img = np.zeros((img_height,img_width,self.obj_pool_display_channel),np.uint8)
-                obj_count = 0
-                for k,v in self.objects_pool.items():
-                    chosen_img = cv2.resize(v.first_img,(self.obj_pool_display_width,self.obj_pool_display_height))
-                    disp_objs_pool_img[ 0:self.obj_pool_display_height,obj_count*self.obj_pool_display_width:(obj_count+1)*self.obj_pool_display_width] = chosen_img
-                    cv2.putText(disp_objs_pool_img,"ID:{}".format(v.id),(self.obj_pool_display_width*(obj_count),self.obj_pool_display_height-3),cv2.FONT_HERSHEY_SIMPLEX,1,v.color,2)
-                    obj_count += 1
-                return disp_objs_pool_img
-            else:
-                return None
+    def draw_objects_pool(self,mode='h',set_range=0):
+        from Draw_trajectory import draw_objects_pool
+        return draw_objects_pool(self.objects_pool,self.obj_pool_display_height,self.obj_pool_display_width,self.obj_pool_display_channel,mode=mode,set_range=set_range)
+            # # if len(self.objects_pool)>0:
+                # # img_height = self.obj_pool_display_height
+                # # if set_range > 0:
+                    # # img_width = max(set_range,self.obj_pool_display_width*len(self.objects_pool))
+                # # else:
+                    # # img_width = self.obj_pool_display_width*len(self.objects_pool)
+                # # disp_objs_pool_img = np.zeros((img_height,img_width,self.obj_pool_display_channel),np.uint8)
+                # # obj_count = 0
+                # # for k,v in self.objects_pool.items():
+                    # # chosen_img = cv2.resize(v.first_img,(self.obj_pool_display_width,self.obj_pool_display_height))
+                    # # disp_objs_pool_img[ 0:self.obj_pool_display_height,obj_count*self.obj_pool_display_width:(obj_count+1)*self.obj_pool_display_width] = chosen_img
+                    # # cv2.putText(disp_objs_pool_img,"ID:{}".format(v.id),(self.obj_pool_display_width*(obj_count),self.obj_pool_display_height-3),cv2.FONT_HERSHEY_SIMPLEX,1,v.color,2)
+                    # # obj_count += 1
+                # # return disp_objs_pool_img
+            # # else:
+                # # return None
             
     def draw_color_probability_map(self,img_current,pt_base_center_x,pt_base_center_y,alpha=0.5):
         # probability color map

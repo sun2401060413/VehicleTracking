@@ -551,7 +551,7 @@ def gaussian_test():
     plt.show()
 
 def match_based_on_spatial_temperal_prior_test_1(tracker_record,pt_obj,t_interval=30):
-    '''test location predicting of object,
+    '''test predicting location of object,
     Predict object location in future based on the current object location, movement characteristics and time interval setting
     Parameters:
         tracker_record: tracking information

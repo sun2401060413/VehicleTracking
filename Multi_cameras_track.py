@@ -129,7 +129,7 @@ class TrackersArray(object):
                     box_info = bx[0:4]
                     frame_info = bx[4]
                     cp_img = img_dict[associated_elem][box_info[1]:box_info[3],box_info[0]:box_info[2]].copy()
-                    cv2.imshow('cp_img',cp_img)
+                    # cv2.imshow('cp_img',cp_img)
                     
                     if self.object_append_dict[associated_elem].__contains__(bx):
                         self.multi_tracker_dict[elem].cam2_new_object_id = self.object_append_dict[associated_elem].pop(bx)
@@ -162,15 +162,29 @@ class TrackersArray(object):
 
         return new_img_dict
         
+    def draw_single_camera_objects_pool(self,mode='h',set_range=0):
+        output_img_dict = {}
+        for elem in self.trackers_dict:
+            output_img_dict[elem] = self.trackers_dict[elem].draw_objects_pool(mode=mode,set_range=set_range)
+        return output_img_dict
+        
+    def draw_inter_camera_objects_pool(self,mode='v',set_range=0):
+        output_img_dict = {}
+        for elem in self.multi_tracker_dict:
+            output_img_dict[elem] = self.multi_tracker_dict[elem].draw_objects_pool(mode=mode,set_range=set_range)
+        return output_img_dict
+        
     def get_global_id(self,device_id,obj_id):
         output_id = None
-        
         # Recursive condition
         if self.get_reverse_associate_dict().__contains__(device_id):
-            output_id = self.get_global_id(
-                self.get_reverse_associate_dict()[device_id],
-                self.multi_tracker_dict[self.get_reverse_associate_dict()[device_id]].get_reverse_mapping_recorder()[obj_id]
-            )
+            if self.multi_tracker_dict[self.get_reverse_associate_dict()[device_id]].mapping_recorder.__contains__(obj_id):
+                output_id = self.get_global_id(
+                    self.get_reverse_associate_dict()[device_id],
+                    self.multi_tracker_dict[self.get_reverse_associate_dict()[device_id]].get_reverse_mapping_recorder()[obj_id]
+                )
+            else:
+                return None
         else:
             output_id = obj_id
         return output_id
@@ -181,7 +195,7 @@ class TrackersArray(object):
 
 class MCT_STP_tracker(object):
     def __init__(self,
-                frame_space_dist = 300,
+                frame_space_dist = 250,
                 obj_STP_tracker_1 = None,
                 obj_STP_tracker_2 = None,
                 obj_multi_cameras_STP = None,
@@ -245,10 +259,9 @@ class MCT_STP_tracker(object):
     def update(self,box,img=None):
         if len(box) == 1:       # box in cam 2
             return self.isTrackFinish(box[0]),self.objects_pool
-            
         box_info = [box[0],box[1],box[2],box[3]]
         frame_info = box[4]
-        if self.obj_STP_tracker_2.isBoxInRegion(box_info):
+        if self.obj_STP_tracker_2.isBoxInRegion(box_info)==0:
             matched_obj = self.match(box_info,frame_info)
             if matched_obj and self.cam2_new_object_id is not None:
                 # self.objects_pool[matched_obj.id].update(box_info,frame_info)
@@ -313,12 +326,14 @@ class MCT_STP_tracker(object):
 
     def rank(self,objs_list):
         '''find the nearest object in spatial and temporal space, the default weights of two space is 0.5 and 0.5'''
+
         if objs_list == []:
             return None
         else:
             def takeSecond(elem):
                 return elem[1]
             dist_list = []
+            print("len(objs_list):",len(objs_list))
             for elem in objs_list:
                 dist = elem[1]
                 dist_list.append([objs_list[0],dist])
@@ -346,20 +361,14 @@ class MCT_STP_tracker(object):
                     ,cv2.FONT_HERSHEY_COMPLEX,2,v.color,5)
         return img
         
-    def draw_objects_pool(self):
-        if len(self.objects_pool)>0:
-            img_height = self.obj_pool_display_height
-            img_width = self.obj_pool_display_width*len(self.objects_pool)
-            disp_objs_pool_img = np.zeros((img_width,img_height,self.obj_pool_display_channel),np.uint8)
-            obj_count = 0
-            for k,v in self.objects_pool.items():
-                chosen_img = cv2.resize(v.first_img,(self.obj_pool_display_width,self.obj_pool_display_height))
-                disp_objs_pool_img[ self.obj_pool_display_width*obj_count:self.obj_pool_display_width*(obj_count+1),0:self.obj_pool_display_height] = chosen_img
-                cv2.putText(disp_objs_pool_img,"ID:{}".format(v.id),(0,self.obj_pool_display_height*(obj_count+1)-3),cv2.FONT_HERSHEY_SIMPLEX,1,v.color,2)
-                obj_count += 1
-            return disp_objs_pool_img
-        else:
-            return None
+    def draw_objects_pool(self,mode='v',set_range=0):
+        from Draw_trajectory import draw_objects_pool
+        return draw_objects_pool(   self.objects_pool,
+                                    self.obj_pool_display_height,
+                                    self.obj_pool_display_width,
+                                    self.obj_pool_display_channel,
+                                    mode=mode,
+                                    set_range=set_range)
             
     def draw_color_probability_map(self,img_current,pt_base_center_x,pt_base_center_y,alpha=0.5):
         # probability color map
@@ -382,7 +391,7 @@ def TrackersArray_test():
     from data_generator import get_files_info
     obj_data_generator = get_files_info()
     
-    time_interval = 5
+    time_interval = 25
     # file path 1
     file_dict_1 = obj_data_generator.get_filepath(0)
     file_dict_2 = obj_data_generator.get_filepath(1)
@@ -427,15 +436,16 @@ def TrackersArray_test():
                                     associate_dict_c1_c2)
     
     from Single_camera_track import STP_tracker
-    obj_tracker_1 = STP_tracker(frame_space_dist=50,obj_STP=STP_Predictor_1)
+    obj_tracker_1 = STP_tracker(frame_space_dist=75,obj_STP=STP_Predictor_1)
     obj_tracker_1.match_mode = 'Prob'
     obj_tracker_1.display_monitor_region = True
-    obj_tracker_2 = STP_tracker(frame_space_dist=50,obj_STP=STP_Predictor_2)
+    obj_tracker_2 = STP_tracker(frame_space_dist=75,obj_STP=STP_Predictor_2)
     obj_tracker_2.region_top = 250
     obj_tracker_2.match_mode = 'Prob'
     obj_tracker_2.display_monitor_region = True
     
     obj_MCT_tracker_1 = MCT_STP_tracker(
+                            frame_space_dist = 300,
                             obj_STP_tracker_1 = obj_tracker_1,
                             obj_STP_tracker_2 = obj_tracker_2,
                             obj_multi_cameras_STP = Multi_STP_Predictor
@@ -452,6 +462,16 @@ def TrackersArray_test():
                                 trackers_dict=trackers_dict,
                                 multi_tracker_dict=multi_tracker_dict,
                                 associate_dict=associate_dict)
+    # # TEST: STARTING POINT 
+    # start_x_in_cam_2,start_y_in_cam_2=0,0
+    # print("starting_points:",obj_TrackersArray.multi_tracker_dict[0].obj_multi_cameras_STP.get_start_point_transform(start_x_in_cam_2=start_x_in_cam_2,start_y_in_cam_2=start_y_in_cam_2))
+    # print("transformed_height_for_disp:",obj_TrackersArray.multi_tracker_dict[0].obj_multi_cameras_STP.obj_single_camera_STP_cam_1.perspective_transformer.transformed_height_for_pred)
+    # print("transformed_width_for_pred:",obj_TrackersArray.multi_tracker_dict[0].obj_multi_cameras_STP.obj_single_camera_STP_cam_1.perspective_transformer.transformed_width_for_pred)
+    # print("transformed_height_for_disp:",obj_TrackersArray.multi_tracker_dict[0].obj_multi_cameras_STP.obj_single_camera_STP_cam_2.perspective_transformer.transformed_height_for_pred)
+    # print("transformed_width_for_pred:",obj_TrackersArray.multi_tracker_dict[0].obj_multi_cameras_STP.obj_single_camera_STP_cam_2.perspective_transformer.transformed_width_for_pred)
+    
+    from Draw_trajectory import Canvas
+    obj_canvas = Canvas(obj_TrackersArray)
                                 
     from data_generator import two_cameras_simulator    # Just for test
     cameras_simulator = two_cameras_simulator(
@@ -480,22 +500,44 @@ def TrackersArray_test():
                                 )
             frame_count+=time_interval
             
-            # # ==== Draw object trajectory in single-camera =====
-            new_img_dict = obj_TrackersArray.draw_trajectory(img_dict=img_dict,mode='multi')
-            # new_img_dict = obj_TrackersArray.draw_trajectory(img_dict)
-            for elem in new_img_dict:
-                cv2.namedWindow('img_'+str(elem),cv2.WINDOW_NORMAL)
-                cv2.imshow('img_'+str(elem),new_img_dict[elem])
-                cv2.waitKey(1)
+            # # ==== TEST:Draw object trajectory in single-camera =====
+            trajectory_img = obj_TrackersArray.draw_trajectory(img_dict=img_dict,mode='multi')
+            # # Display images
+            # trajectory_img = obj_TrackersArray.draw_trajectory(img_dict)
+            # for elem in trajectory_img:
+                # cv2.namedWindow('trajectory_img_'+str(elem),cv2.WINDOW_NORMAL)
+                # cv2.imshow('trajectory_img_'+str(elem),trajectory_img[elem])
+                # cv2.waitKey(1)
+            # # ==== TEST:Draw objects pool in single-camera =====
+            single_objs_pool_img = obj_TrackersArray.draw_single_camera_objects_pool(set_range=960)
+            # # Display images
+            # for elem in single_objs_pool_img:
+                # if single_objs_pool_img[elem] is not None:
+                    # cv2.imshow('single_objs_pool_img_'+str(elem),single_objs_pool_img[elem])
+                # cv2.waitKey(1)
+            # # ==== TEST:Draw objects pool in inter-camera =====
+            multi_obj_pool_img = obj_TrackersArray.draw_inter_camera_objects_pool(set_range=540)
+            # # Display images
+            # if multi_obj_pool_img is not None:
+                # for elem in multi_obj_pool_img:
+                    # if multi_obj_pool_img[elem] is not None:
+                        # cv2.imshow('multi_obj_pool_img_'+str(elem),multi_obj_pool_img[elem])
+                    # cv2.waitKey(1)
+            from Draw_trajectory import draw_all_results
+            result_img = draw_all_results(trajectory_img,single_objs_pool_img,multi_obj_pool_img,[0,1],540,960,100)
+            
+            from Draw_trajectory import draw_objects_on_canvas
+            canvas_img = draw_objects_on_canvas(obj_canvas,obj_TrackersArray)
+            
+            cv2.namedWindow("result_img",cv2.WINDOW_NORMAL)
+            cv2.namedWindow("canvas",cv2.WINDOW_NORMAL)
+            cv2.imshow("result_img",result_img)
+            cv2.imshow("canvas",canvas_img)
+            # cv2.imwrite(r"D:\Project\tensorflow_model\VehicleTracking\data_generator\gen_data\resutls\camera_array\{}\{}.jpg".format(time_interval,frame_count),result_img)
+            cv2.waitKey()
 
     except StopIteration:
         pass
-    print("===============")
-    print(obj_TrackersArray.get_global_id(1,0))
-    print(obj_TrackersArray.get_global_id(1,1))
-    print(obj_TrackersArray.get_global_id(1,2))
-    print(obj_TrackersArray.get_global_id(1,3))
-    print(obj_TrackersArray.get_global_id(1,4))
     for elem in obj_TrackersArray.multi_tracker_dict:
         print(obj_TrackersArray.multi_tracker_dict[elem].mapping_recorder)
     return
