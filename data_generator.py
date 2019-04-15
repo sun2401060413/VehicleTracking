@@ -76,34 +76,63 @@ class two_cameras_simulator(object):
         self.image_fileroot_1 = image_fileroot_1
         self.image_fileroot_2 = image_fileroot_2
         
-    def data_gen(self,time_interval=1):
+    def data_gen(self,time_interval=1,shape=(1080,1920,3)):
         data_1 = pd.read_csv(self.csv_filename_1)
         data_2 = pd.read_csv(self.csv_filename_2)
         
-        unique_id_1 = np.unique(data_1['fps'])
-        unique_id_2 = np.unique(data_2['fps'])
+        filelist_1 = os.listdir(self.image_fileroot_1)
+        filelist_2 = os.listdir(self.image_fileroot_2)
+        filelist_1.sort(key = lambda x:int(x[:-4]))
+        filelist_2.sort(key = lambda x:int(x[:-4]))
         
-        shape_1 = cv2.imread(os.path.join(self.image_fileroot_1,str(unique_id_1[0])+'.jpg')).shape
-        shape_2 = cv2.imread(os.path.join(self.image_fileroot_2,str(unique_id_2[0])+'.jpg')).shape
+        total = max(len(filelist_1),len(filelist_2))
         
-        for v,elem in enumerate(np.unique(np.append(unique_id_1,unique_id_2,axis=0))):
-            if v%time_interval == 0:
-                # image 1 
-                if elem in unique_id_1:
-                    img_1 = cv2.imread(os.path.join(self.image_fileroot_1,str(elem)+'.jpg'))
+        
+        for i in range(0,total):
+            if i%time_interval==0:
+                filename_1 = os.path.join(self.image_fileroot_1,"{}.jpg".format(i))
+                filename_2 = os.path.join(self.image_fileroot_2,"{}.jpg".format(i))
+                if os.path.exists(filename_1):
+                    img_1 = cv2.imread(filename_1)
                 else:
-                    img_1 = np.zeros(shape_1)
-                    
-                # image 2
-                if elem in unique_id_2:
-                    img_2 = cv2.imread(os.path.join(self.image_fileroot_2,str(elem)+'.jpg'))
+                    img_1 = np.zeros(shape,np.uint8)
+                if os.path.exists(filename_2):
+                    img_2 = cv2.imread(filename_2)
                 else:
-                    img_2 = np.zeros(shape_1)
+                    img_2 = np.zeros(shape,np.uint8)
                     
-                frame_data_1 = get_frame_data(data_1,elem)
-                frame_data_2 = get_frame_data(data_2,elem)
+                frame_data_1 = get_frame_data(data_1,i)
+                frame_data_2 = get_frame_data(data_2,i)
                 
                 yield img_1,img_2,frame_data_1,frame_data_2
+        # print(data_1[data_1['fps']==-1].empty)
+        '''
+        # unique_id_1 = np.unique(data_1['fps'])
+        # unique_id_2 = np.unique(data_2['fps'])
+        
+        # shape_1 = cv2.imread(os.path.join(self.image_fileroot_1,str(unique_id_1[0])+'.jpg')).shape
+        # shape_2 = cv2.imread(os.path.join(self.image_fileroot_2,str(unique_id_2[0])+'.jpg')).shape
+        
+        # for v,elem in enumerate(np.unique(np.append(unique_id_1,unique_id_2,axis=0))):
+            # if v%time_interval == 0:
+                # # image 1 
+                # if elem in unique_id_1:
+                    # img_1 = cv2.imread(os.path.join(self.image_fileroot_1,str(elem)+'.jpg'))
+                # else:
+                    # img_1 = np.zeros(shape_1)
+                    
+                # # image 2
+                # if elem in unique_id_2:
+                    # img_2 = cv2.imread(os.path.join(self.image_fileroot_2,str(elem)+'.jpg'))
+                # else:
+                    # img_2 = np.zeros(shape_1)
+                    
+                # frame_data_1 = get_frame_data(data_1,elem)
+                # frame_data_2 = get_frame_data(data_2,elem)
+                
+                # yield img_1,img_2,frame_data_1,frame_data_2
+        '''
+
     
 # # ===== UTILS FUNCTIONS =====  
 def get_files_info():
