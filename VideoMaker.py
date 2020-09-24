@@ -6,25 +6,26 @@ import cv2
 import os
 import glob
 
-img_root = r"D:\Project\tensorflow_model\VehicleTracking\data_generator\gen_data\resutls\camera_array\ver2\25"
-video_root = r"D:\Project\tensorflow_model\VehicleTracking\data_generator\gen_data\resutls\camera_array\ver2\25"
+img_root = r"E:\Project\CV\Data\results\saved_0831\saved_results\00M35S_1589994035"
+video_root = r"E:\Project\CV\Data\results\saved"
 
-def VideoMaker(input_root,output_root,height=1080,width=1920,fps=2):
+def VideoMaker(input_root,output_root,height=1080,width=1920,fps=30):
     # Four-Character Codes
-    fourcc = cv2.VideoWriter_fourcc('X','V','I','D')
-    videoWriter = cv2.VideoWriter(os.path.join(output_root,'trace.mp4'), fourcc, fps, (width,height))
+    fourcc = cv2.VideoWriter_fourcc('X', 'V', 'I', 'D')
+    path_split = img_root.split('\\')
+    videoWriter = cv2.VideoWriter(os.path.join(output_root, path_split[-1]+'_trace.mp4'), fourcc, fps, (width, height))
     os.chdir(input_root)
     filelist = glob.glob("*.jpg")
-    filelist.sort(key= lambda x:int(x[:-4]))
+    filelist.sort(key=lambda x: int(x[:-4]))
     for elem in filelist:
-        img = cv2.imread(os.path.join(input_root,elem))
+        img = cv2.imread(os.path.join(input_root, elem))
         if img is not None:
-            img = cv2.resize(img,(width,height))
+            img = cv2.resize(img, (width, height))
             videoWriter.write(img) 
-            cv2.namedWindow('img',cv2.WINDOW_NORMAL)
-            cv2.imshow('img',img)
+            cv2.namedWindow('img', cv2.WINDOW_NORMAL)
+            cv2.imshow('img', img)
             cv2.waitKey(1)
     videoWriter.release()
 
 if __name__=="__main__":
-    VideoMaker(img_root,video_root,)
+    VideoMaker(img_root, video_root, fps=10)
