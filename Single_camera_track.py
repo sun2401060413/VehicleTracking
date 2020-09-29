@@ -12,6 +12,8 @@ import cv2
 import json
 import numpy as np
 import operator
+import warnings
+
 
 # SETTINGS
 # 1. color setting for displaying
@@ -116,6 +118,9 @@ class vehicle_object(object):
             return 0
          
 class IOU_tracker(object):
+    '''通过上下左右四个拌线确定监控区域
+        Deprecated
+    '''
     def __init__(self,  
                     frame_space_dist=5,
                     region_top=450,
@@ -123,6 +128,7 @@ class IOU_tracker(object):
                     region_left=50,
                     region_right=50):
         # objects pool, all tracked objects are saved in this dict
+        warnings.warn("This class is deprecated, use Single_camera_track.IOU_tracker_with_polygon_region instead", DeprecationWarning)
         self.objects_pool = {}
         self.hist_objects_pool = {}
         self.objects_count = 0
