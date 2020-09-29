@@ -921,7 +921,7 @@ def STP_tracker_test():
     
     trace_record = []
     
-    from data_generator import load_tracking_info
+    from VehicleTracking.data_generator import load_tracking_info
     tracker_record = load_tracking_info(tracking_info_filepath)
     
     from Perspective_transform import Perspective_transformer
