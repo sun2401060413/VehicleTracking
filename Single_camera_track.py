@@ -3,6 +3,7 @@ SCT: Single camera tracking.
 Multi-objects tracking in single camera.
 written by sunzhu on 2019-03-19, version 1.0
 Updated by sunzhu on 2020-08-18, version 1.1
+Updated by sunzhu on 2020-09-29, version 1.2
 '''
 
 import os, sys
