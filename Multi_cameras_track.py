@@ -16,8 +16,8 @@ import torch
 import torch.nn as nn
 import time
 
-import compute_VeRi_dis as dist
-from Model_Wrapper import ResNet_Loader
+# import compute_VeRi_dis as dist
+# from Model_Wrapper import ResNet_Loader
 
 
 # from Single_camera_track import STP_tracker
@@ -38,7 +38,7 @@ def get_box_center(box,mode="both"):
 # # ===== CLASS =====
 class TrackersArray(object):
     '''Array of Cameras'''
-    def __init__(self,trackers_dict={},multi_tracker_dict={},associate_dict={}):
+    def __init__(self, trackers_dict={}, multi_tracker_dict={}, associate_dict={}):
         '''
         trackers_dict: tracker with CAM_id
         STP_dict: spatial-temporal-prior between CAM_id and next_CAM_id 
@@ -87,7 +87,7 @@ class TrackersArray(object):
             self.multi_tracker_dict[prev_id] = obj_multi_tracker
             self.associate_dict[prev_id] = current_id       # record mapping relation
         
-    def update(self,img_dict,box_dict,frame_count=None):
+    def update(self, img_dict, box_dict, frame_count=None):
         '''
         img_dict: images dict
         box_dict: box_dict
@@ -435,8 +435,8 @@ def TrackersArray_test():
     pt_obj_1 = Perspective_transformer(file_dict_1['pt_savepath'])
     pt_obj_2 = Perspective_transformer(file_dict_2['pt_savepath'])
 
-    from cameras_associate import Single_camera_STP
-    STP_Predictor_1 = Single_camera_STP(
+    from cameras_associate import SingleCameraSTP
+    STP_Predictor_1 = SingleCameraSTP(
                         tracker_record_1,
                         pt_obj_1,
                         time_interval = time_interval)
@@ -444,14 +444,14 @@ def TrackersArray_test():
     STP_Predictor_1.var_beta_y = int(25/time_interval)+1
     STP_Predictor_1.update_predictor()            
                         
-    STP_Predictor_2 = Single_camera_STP(
+    STP_Predictor_2 = SingleCameraSTP(
                         tracker_record_2,
                         pt_obj_2,
                         time_interval = time_interval)
     STP_Predictor_2.var_beta_x = int(25*25/time_interval)
     STP_Predictor_2.var_beta_y = int(25/time_interval)+1
     STP_Predictor_2.update_predictor()
-    from cameras_associate import Multi_cameras_STP
+    from cameras_associate import MultiCamerasSTP
     
     # objects mapping between cam_1 and cam_2
     associate_dict_c1_c2 = {
@@ -589,8 +589,8 @@ def MCT_STP_tracker_test():
     pt_obj_1 = Perspective_transformer(file_dict_1['pt_savepath'])
     pt_obj_2 = Perspective_transformer(file_dict_2['pt_savepath'])
 
-    from cameras_associate import Single_camera_STP
-    single_camera_STP_1 = Single_camera_STP(
+    from cameras_associate import SingleCameraSTP
+    single_camera_STP_1 = SingleCameraSTP(
                         tracker_record_1,
                         pt_obj_1,
                         time_interval = time_interval)
@@ -598,7 +598,7 @@ def MCT_STP_tracker_test():
     single_camera_STP_1.var_beta_y = int(25/time_interval)+1
     single_camera_STP_1.update_predictor()            
                         
-    single_camera_STP_2 = Single_camera_STP(
+    single_camera_STP_2 = SingleCameraSTP(
                         tracker_record_2,
                         pt_obj_2,
                         time_interval = time_interval)
@@ -830,10 +830,346 @@ def useless():
     pass
 
 
+# ===============================================================================================
+# ===== NOTE: The author is mad when he writing this part, code lines below are all useless =====
+# ===============================================================================================
+
+def i_completely_forget_save_me():
+    """Just for showing, it doesn't work in reality"""
+    from Common import cam_names, roi_info, save_path, track_info, associate_info
+    from cameras_associate import get_associate_dict
+    from Perspective_transform import Perspective_transformer
+
+
+    print("=== Hello, my friend~~~~ ==== ")
+
+    # associate_dict: TEST PASS
+    associate_dict = get_associate_dict(associate_info)
+
+    pt_transformer_1 = Perspective_transformer(roi_info[1])
+    pt_transformer_2 = Perspective_transformer(roi_info[2])
+    pt_transformer_3 = Perspective_transformer(roi_info[3])
+    pt_transformer_4 = Perspective_transformer(roi_info[4])
+
+    with open(track_info[1], 'r') as doc:
+        trace_1 = json.load(doc)
+    with open(track_info[2], 'r') as doc:
+        trace_2 = json.load(doc)
+    with open(track_info[3], 'r') as doc:
+        trace_3 = json.load(doc)
+    with open(track_info[4], 'r') as doc:
+        trace_4 = json.load(doc)
+
+    # labeled img; cropped img; traces; transformers;
+    cam_array = [
+        [save_path[1], os.path.join(save_path[1], "images"), trace_1, pt_transformer_1],
+        [save_path[2], os.path.join(save_path[2], "images"), trace_2, pt_transformer_2],
+        [save_path[3], os.path.join(save_path[3], "images"), trace_3, pt_transformer_3],
+        [save_path[4], os.path.join(save_path[4], "images"), trace_4, pt_transformer_4]
+    ]
+
+    dist_1, diff_1, spd_1 = estimate_distance(trace_1, trace_2, associate_dict["003"])
+    dist_2, diff_2, spd_2 = estimate_distance(trace_2, trace_3, associate_dict["004"])
+    dist_3, diff_3, spd_3 = estimate_distance(trace_3, trace_4, associate_dict["005"])
+
+    # cam_2:1387+946;
+    # cam_3:1388+156;   210;
+    # cam_4:1388+324;   168; (210); 547; +337;
+    # cam_5:1388+534;   210; 35;         -175;
+
+    # print(dist_1, dist_2, dist_3)
+    # print(diff_1, diff_2, diff_3)
+    # print(spd_1, spd_2, spd_3)
+
+    # 186.87489281155294    547.9742216846969       35.846546287736814  m
+    # 166.5142857142857     528.875                 34.55263157894737   frames
+    # 28.421919696601453    25.913013562801034      27.095261951284453  m/s
+    # 210/30 = 7;7*25=175;  168/30 = 6; 6*25=150    210/30 = 7; 7*25=175
+    #                       525 - 150 = 375         35 - 175 = 140
+
+    # # get_cam_assoicate(trace_front=cam_array[0][2], trace_back=cam_array[1][2], associate_dict=associate_dict)
+
+    f1_in, f2_in, f3_in, f4_in, f1_out, f2_out, f3_out = get_objectid_in_each_frame(
+        trace_1=trace_1,
+        trace_2=trace_2,
+        trace_3=trace_3,
+        trace_4=trace_4,
+        assoc_dict_12=associate_dict["003"],
+        assoc_dict_23=associate_dict["004"],
+        assoc_dict_34=associate_dict["005"],
+    )     # 003, 004, 005
+
+    # print(f1_in)
+    # print(f2_in)
+    # print(f3_in)
+    # print(f4_in)
+    # print(f1_out)
+    # print(f2_out)
+    # print(f3_out)
+
+    # # # 读入图片 PASS
+    # for i in range(1, 3001):
+    #     filename = "{:0>4d}.jpg".format(i)
+    #     imgs = [cv2.imread(os.path.join(elem[0], filename)) for elem in cam_array]
+    #     in_scene_objs_1 = draw_in_scene_objs(trace_1, f1_in, i, cam_array[0][0])
+    #     in_scene_objs_2 = draw_in_scene_objs(trace_2, f2_in, i, cam_array[1][0])
+    #     in_scene_objs_3 = draw_in_scene_objs(trace_3, f3_in, i, cam_array[2][0])
+    #     in_scene_objs_4 = draw_in_scene_objs(trace_4, f4_in, i, cam_array[3][0])
+    #     out_scene_objs_1 = draw_in_scene_objs(trace_1, f1_out, i, cam_array[0][0], mode='v')
+    #     out_scene_objs_2 = draw_in_scene_objs(trace_2, f2_out, i, cam_array[1][0], mode='v')
+    #     out_scene_objs_3 = draw_in_scene_objs(trace_3, f3_out, i, cam_array[2][0], mode='v')
+    #     cv2.namedWindow("002", cv2.WINDOW_NORMAL)
+    #     cv2.namedWindow("003", cv2.WINDOW_NORMAL)
+    #     cv2.namedWindow("004", cv2.WINDOW_NORMAL)
+    #     cv2.namedWindow("005", cv2.WINDOW_NORMAL)
+    #     cv2.imshow("002", imgs[0])
+    #     cv2.imshow("003", imgs[1])
+    #     cv2.imshow("004", imgs[2])
+    #     cv2.imshow("005", imgs[3])
+    #     if in_scene_objs_1 is not None:
+    #         cv2.imshow("in_scene_objs_1", in_scene_objs_1)
+    #     if in_scene_objs_2 is not None:
+    #         cv2.imshow("in_scene_objs_2", in_scene_objs_2)
+    #     if in_scene_objs_3 is not None:
+    #         cv2.imshow("in_scene_objs_3", in_scene_objs_3)
+    #     if in_scene_objs_4 is not None:
+    #         cv2.imshow("in_scene_objs_4", in_scene_objs_4)
+    #     if out_scene_objs_1 is not None:
+    #         cv2.imshow("out_scene_objs_1", out_scene_objs_1)
+    #     if out_scene_objs_2 is not None:
+    #         cv2.imshow("out_scene_objs_2", out_scene_objs_2)
+    #     if out_scene_objs_3 is not None:
+    #         cv2.imshow("out_scene_objs_3", out_scene_objs_3)
+    #
+    #     print("i:", i)
+    #
+    #     # if len(cropped_imgs[i]) > 0:
+    #     #     scene_img = []
+    #     #     for v, elem in enumerate(cropped_imgs[i]):
+    #     #         fname = 'id_{:0>4d}.jpg'.format(int(elem))
+    #     #         scene_img.append(cv2.imread(os.path.join(cam_array[0][1], fname)))
+    #     #         cv2.imshow(str(v), scene_img[v])
+    #     cv2.waitKey(1)
+    #     # print(cam_array[0][2][str(i)])
+    #
+
+    draw_canvas_with_objects(trace_1=trace_1,
+                             trace_2=trace_2,
+                             trace_3=trace_3,
+                             trace_4=trace_4,
+                             assoc_dict_1=associate_dict["003"],
+                             assoc_dict_2=associate_dict["004"],
+                             assoc_dict_3=associate_dict["005"])
+
+
+    pass
+
+class DrawObject(object):
+    def __init__(self,
+                 id=None,
+                 color=None,
+                 first_img=None):
+        self.id = id
+        self.color = color
+        self.first_img = first_img
+
+
+def draw_in_scene_objs(trace, f, frame, save_path, mode='h'):
+    from Draw_trajectory import draw_objects_pool
+    objs = {}
+    for elem in f[frame]:       # 帧为key，内容为id
+        objs[elem] = DrawObject(id=elem, color=trace[elem]['color'], first_img=cv2.imread((os.path.join(save_path, "images\\id_{:0>4d}.jpg".format(int(elem))))))
+    if mode == 'h':
+        return draw_objects_pool(objs, set_height=100, set_width=100, set_channel=3, set_range=700, mode='h')
+    else:
+        return draw_objects_pool(objs, set_height=100, set_width=100, set_channel=3, set_range=800, mode='v')
+
+def draw_canvas_with_objects(
+        trace_1=None,
+        trace_2=None,
+        trace_3=None,
+        trace_4=None,
+        assoc_dict_1=None,
+        assoc_dict_2=None,
+        assoc_dict_3=None
+):
+    object_in_canvas = {}
+    infer_chain = associate_chain(assoc_dict_1=assoc_dict_1, assoc_dict_2=assoc_dict_2, assoc_dict_3=assoc_dict_3)
+    # record_chain =
+    pass
+
+
+def associate_chain(assoc_dict_1=None, assoc_dict_2=None, assoc_dict_3=None):
+    infer_chain = {}
+    # 初始化链条
+    # 2:3:4:5
+    # 1-2-3
+    for elem in assoc_dict_1:
+        infer_chain[elem] = [elem, assoc_dict_1[elem]]
+        if assoc_dict_2.__contains__(assoc_dict_1[elem]):
+            infer_chain[elem].append(assoc_dict_2[assoc_dict_1[elem]])
+            if assoc_dict_3.__contains__(assoc_dict_2[assoc_dict_1[elem]]):
+                infer_chain[elem].append(assoc_dict_3[assoc_dict_2[assoc_dict_1[elem]]])
+    print(infer_chain)
+    return infer_chain
+
+
+def record_chain(trace_1, trace_2, trace_3, trace_4, infer_chain):
+    rcd_chain = {}
+    # for elem in infer_chain:
+    #     rcd_chain[elem] =
+    # pass
+
+
+def estimate_distance(trace_front=None, trace_back=None, associate_dict=None):
+    """从匹配路径计算未监控区域的长度"""
+    frame_rate = 25
+    estimated_dist = []
+    diff_frames = []
+    speeds = []
+    for elem in associate_dict:
+        # 存在匹配的才算
+        if int(associate_dict[elem]) > 0:
+            first_frame = trace_front[elem]["last_frame"]
+            last_frame = int(trace_back[associate_dict[elem]]["list"][0][1])
+            diff_frame = last_frame - first_frame
+            speed = trace_front[elem]["speed"]/3.6
+            estimated_dist.append((diff_frame/frame_rate)*speed)
+            diff_frames.append(diff_frame)
+            speeds.append(speed)
+    return np.mean(np.array(estimated_dist)), np.mean(np.array(diff_frames)), np.mean(np.array(speeds))
+
+
+def get_useful_trace_data():
+    pass
+
+
+# 如何知道每一帧都有哪些目标？
+def get_objectid_in_each_frame(trace_1=None,
+                               trace_2=None,
+                               trace_3=None,
+                               trace_4=None,
+                               assoc_dict_12=None,
+                               assoc_dict_23=None,
+                               assoc_dict_34=None):
+    # 获取每一帧图像存在目标的编号
+    # 应该按照帧号输出, 帧号没有0, 目标编号有0
+
+    f1_in = get_in_scene_frame(trace=trace_1)
+    f2_in = get_in_scene_frame(trace=trace_2)
+    f3_in = get_in_scene_frame(trace=trace_3)
+    f4_in = get_in_scene_frame(trace=trace_4)
+
+    f1_out = get_out_scene_frame(trace_front=trace_1, trace_back=trace_2, assoc_dict=assoc_dict_12)
+    f2_out = get_out_scene_frame(trace_front=trace_2, trace_back=trace_3, assoc_dict=assoc_dict_23)
+    f3_out = get_out_scene_frame(trace_front=trace_3, trace_back=trace_4, assoc_dict=assoc_dict_34)
+
+    return f1_in, f2_in, f3_in, f4_in, f1_out, f2_out, f3_out
+
+def get_in_scene_frame(trace=None):
+    rst_dict = {}
+    for i in range(1, 3001):    # 自用
+        rst_dict[i] = []        # 每帧初始化为list
+    for elem in trace:          # trace的key为id
+        boxlst = trace[elem]["list"]
+        for bx in boxlst:
+            rst_dict[bx[1]].append(elem)
+    return rst_dict
+
+def get_out_scene_frame(trace_front=None, trace_back=None, assoc_dict=None):
+    rst_dict = {}
+    for i in range(1, 3001):
+        rst_dict[i] = []
+    for elem in assoc_dict:     # elem是目标id
+        # 想一下, -1,-2的标记是啥意思来， -1表示进入下一监控场,-2表示进入未监视场.
+        start_frame = trace_front[elem]["last_frame"] + 1
+        if int(assoc_dict[elem]) > 0:    # mapping id
+            end_frame = trace_back[assoc_dict[elem]]['list'][0][1]
+        else:
+            end_frame = 3001
+        # print("start_frame:", start_frame, ";end_frame:", end_frame)
+        for i in range(start_frame, end_frame):
+            rst_dict[i].append(elem)
+    # print(rst_dict)
+    return rst_dict
+
+def fill_some_missing_imgs():
+    """找到缺失的图像，重绘"""
+    from Common import cam_names, data_path, save_path, roi_info
+    from Perspective_transform import Perspective_transformer
+
+    device_id = 1
+    transformer = Perspective_transformer(roi_info[device_id])
+
+    filled_imgs_path = r"E:\Project\CV\trajectory\VehicleTracking\results\sct\filled"
+    for i in range(1, 3001):
+        fname = "{:0>4d}.jpg".format(i)
+        if not os.path.exists(os.path.join(save_path[device_id], fname)):
+            # print(fname)
+            cv2.namedWindow("fill", cv2.WINDOW_NORMAL)
+            img = cv2.imread(os.path.join(data_path[device_id], fname))
+            """Draw the tracking results"""
+            if isinstance(transformer.endpoints, list):
+                pts_list = []
+                pt_list = []
+                for elem in transformer.endpoints:
+                    pt_list = []
+                    pt_list.append(elem)
+                    pts_list.append(pt_list)
+                polygonpts = np.array(pts_list).astype(int)
+            else:
+                pts_list = transformer.endpoints
+                polygonpts = transformer.endpoints
+            cv2.drawContours(img, [polygonpts], -1, (0, 0, 255), 3)
+            cv2.imshow("fill", img)
+            cv2.imwrite(os.path.join(filled_imgs_path, fname), img)
+            cv2.waitKey(1)
+
+
+
+def object_mapping_test():
+    """测试素材完整性，对应性，PASS"""
+    from Common import cam_names, track_info, associate_info, save_path
+
+    with open(associate_info, 'r') as doc:
+        associate_dict = json.load(doc)
+
+    device_id = 2
+    # trace_front = track_info[device_id]
+    # trace_back = track_info[device_id+1]
+
+    asso_dict = associate_dict[cam_names[device_id+1]]
+
+    for elem in asso_dict:
+        print("front:", elem, ";back:", asso_dict[elem])
+        im_1 = cv2.imread(os.path.join(save_path[device_id], "images\\id_{:0>4d}.jpg".format(int(elem))))
+        if int(asso_dict[elem]) > 0:
+            im_2 = cv2.imread(os.path.join(save_path[device_id+1], "images\\id_{:0>4d}.jpg".format(int(asso_dict[elem]))))
+        else:
+            im_2 = np.zeros(im_1.shape, np.uint8)
+        cv2.namedWindow("front", cv2.WINDOW_NORMAL)
+        cv2.namedWindow("back", cv2.WINDOW_NORMAL)
+
+        cv2.imshow("front", im_1)
+        cv2.imshow("back", im_2)
+
+        cv2.waitKey()
+
+
+
+
+    pass
+
+
 if __name__=="__main__":
     # # ===== TEST: Calculate Similiarity test =====
     # SimiliarityCalculateTest()
     # # ===== TEST: TrackerArray_test =====
-    TrackersArray_test()
+    # TrackersArray_test()
     # # ===== TEST: Multi-cameras STP tracker test =====
     # MCT_STP_tracker_test()
+
+    # ====== TEST: Ah~~~, Kill me!!! ======
+    i_completely_forget_save_me()
+    # fill_some_missing_imgs()
+    # object_mapping_test()

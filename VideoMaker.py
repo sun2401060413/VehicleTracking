@@ -6,10 +6,10 @@ import cv2
 import os
 import glob
 
-img_root = r"E:\Project\CV\Data\results\saved_0831\saved_results\00M35S_1589994035"
-video_root = r"E:\Project\CV\Data\results\saved"
+img_root = r"E:\Project\CV\trajectory\VehicleTracking\results\sct\004"
+video_root = r"E:\Project\CV\trajectory\VehicleTracking\results\sct\004"
 
-def VideoMaker(input_root,output_root,height=1080,width=1920,fps=30):
+def VideoMaker(input_root, output_root, height=1080, width=1920, fps=30):
     # Four-Character Codes
     fourcc = cv2.VideoWriter_fourcc('X', 'V', 'I', 'D')
     path_split = img_root.split('\\')
@@ -28,4 +28,4 @@ def VideoMaker(input_root,output_root,height=1080,width=1920,fps=30):
     videoWriter.release()
 
 if __name__=="__main__":
-    VideoMaker(img_root, video_root, fps=10)
+    VideoMaker(img_root, video_root, fps=25)

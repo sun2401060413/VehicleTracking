@@ -13,9 +13,9 @@ from Single_camera_track import colors
 from Single_camera_track import get_box_center
 
 vehicle_shape = {
-    'car':(2,5),
-    'truck':(2.5,10),
-    'bus':(2.5,12),
+    'car': (2, 5),
+    'truck': (2.5, 10),
+    'bus': (2.5, 12),
 }
 
 device_info = {
@@ -25,22 +25,31 @@ device_info = {
 
 # ===== UTILS FUNCITONS =====
 
-def draw_objects_pool(objects_pool,set_height,set_width,set_channel,mode='v',set_range=0):
-    if mode == 'v': # mode = v: vertical
-        if len(objects_pool)>0:
+def draw_objects_pool(objects_pool, set_height, set_width, set_channel, mode='v', set_range=0):
+    """ 目标池绘制函数
+    :param objects_pool: 目标池
+    :param set_height:设定高度
+    :param set_width:设定宽度
+    :param set_channel:设定
+    :param mode: h: 横向模式，v:纵向模式
+    :param set_range: 设定范围
+    :return:
+    """
+    if mode == 'v': # mode = v: vertical        # 竖向排列
+        if len(objects_pool) > 0:
             img_width = set_width
             if set_range > 0:
-                img_height = max(set_range,set_height*len(objects_pool))
+                img_height = max(set_range, set_height*len(objects_pool))
             else:
                 img_height = set_height*len(objects_pool)
-            disp_objs_pool_img = np.zeros((img_height,img_width,set_channel),np.uint8)
+            disp_objs_pool_img = np.zeros((img_height, img_width, set_channel), np.uint8)
             
             obj_count = 0
-            for k,v in objects_pool.items():
-                chosen_img = cv2.resize(v.first_img,(set_width,set_height))
-                disp_objs_pool_img[ set_height*obj_count:set_height*(obj_count+1),0:set_width] = chosen_img
-                cv2.putText(disp_objs_pool_img,"ID:{}".format(v.id),(0,set_height*(obj_count+1)-3),cv2.FONT_HERSHEY_SIMPLEX,1,v.color,2)
-                obj_count=obj_count+1
+            for k, v in objects_pool.items():
+                chosen_img = cv2.resize(v.first_img, (set_width, set_height))
+                disp_objs_pool_img[ set_height*obj_count:set_height*(obj_count+1), 0:set_width] = chosen_img
+                cv2.putText(disp_objs_pool_img, "ID:{}".format(v.id), (0, set_height*(obj_count+1)-3), cv2.FONT_HERSHEY_SIMPLEX, 1, v.color, 2)
+                obj_count = obj_count+1
             return disp_objs_pool_img
         else:
             return None
@@ -48,20 +57,60 @@ def draw_objects_pool(objects_pool,set_height,set_width,set_channel,mode='v',set
         if len(objects_pool)>0:
             img_height = set_height
             if set_range > 0:
-                img_width = max(set_range,set_width*len(objects_pool))
+                img_width = max(set_range, set_width*len(objects_pool))
             else:
                 img_width = set_width*len(objects_pool)
-            disp_objs_pool_img = np.zeros((img_height,img_width,set_channel),np.uint8)
+            disp_objs_pool_img = np.zeros((img_height, img_width, set_channel), np.uint8)
             obj_count = 0
-            for k,v in objects_pool.items():
-                chosen_img = cv2.resize(v.first_img,(set_width,set_height))
-                disp_objs_pool_img[ 0:set_height,obj_count*set_width:(obj_count+1)*set_width] = chosen_img
-                cv2.putText(disp_objs_pool_img,"ID:{}".format(v.id),(set_width*(obj_count),set_height-3),cv2.FONT_HERSHEY_SIMPLEX,1,v.color,2)
+            for k, v in objects_pool.items():
+                chosen_img = cv2.resize(v.first_img, (set_width, set_height))
+                disp_objs_pool_img[0:set_height, obj_count*set_width:(obj_count+1)*set_width] = chosen_img
+                cv2.putText(disp_objs_pool_img, "ID:{}".format(v.id), (set_width*(obj_count),set_height-3), cv2.FONT_HERSHEY_SIMPLEX, 1, v.color, 2)
                 obj_count += 1
             return disp_objs_pool_img
         else:
             return None
     
+def draw_objects_imgs(imgs, set_height, set_width, set_channel, mode='v', set_range=0):
+    if mode == 'v':  # mode = v: vertical        # 竖向排列
+        if len(imgs) > 0:
+            # 设定宽高
+            img_width = set_width
+            if set_range > 0:
+                img_height = max(set_range, set_height * len(imgs))
+            else:
+                img_height = set_height * len(imgs)
+            disp_objs_pool_img = np.zeros((img_height, img_width, set_channel), np.uint8)
+
+            obj_count = 0
+            for k, v in imgs.items():
+                chosen_img = cv2.resize(v.first_img, (set_width, set_height))
+                disp_objs_pool_img[set_height * obj_count:set_height * (obj_count + 1), 0:set_width] = chosen_img
+                cv2.putText(disp_objs_pool_img, "ID:{}".format(v.id), (0, set_height * (obj_count + 1) - 3),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1, v.color, 2)
+                obj_count = obj_count + 1
+            return disp_objs_pool_img
+        else:
+            return None
+    else:  # mode = h
+        if len(imgs) > 0:
+            img_height = set_height
+            if set_range > 0:
+                img_width = max(set_range, set_width * len(imgs))
+            else:
+                img_width = set_width * len(imgs)
+            disp_objs_pool_img = np.zeros((img_height, img_width, set_channel), np.uint8)
+            obj_count = 0
+            for k, v in imgs.items():
+                chosen_img = cv2.resize(v.first_img, (set_width, set_height))
+                disp_objs_pool_img[0:set_height, obj_count * set_width:(obj_count + 1) * set_width] = chosen_img
+                cv2.putText(disp_objs_pool_img, "ID:{}".format(v.id), (set_width * (obj_count), set_height - 3),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1, v.color, 2)
+                obj_count += 1
+            return disp_objs_pool_img
+        else:
+            return None
+
 def draw_all_results(img_dict,s_obj_dict,m_obj_dict,disp_img,deveice_id_list,img_height,img_width,obj_range,disp_height):
    
     device_count = len(deveice_id_list)
@@ -159,7 +208,7 @@ def draw_objects_on_canvas(obj_canvas,obj_camera_array):
     
 # ===== CLASS =====
 class Trajectory(object):
-    def __init__(self,id=-1,color=(255,255,255)):
+    def __init__(self, id=-1, color=(255, 255, 255)):
         self.id = id
         self.color = color
         self.list = []
@@ -171,14 +220,14 @@ class Trajectory(object):
         self.update_status = True
         self.last_observed_iter = None
         
-    def update(self,point,frame=-1,type=0):
+    def update(self, point, frame=-1, type=0):
         '''type=0,1
         0:monitored
         1:unmonitored
         '''
-        self.list.append([point,frame,type])
-        self.last_point,self.last_frame,self.last_type = point,frame,type
-        if type==0:
+        self.list.append([point, frame, type])
+        self.last_point, self.last_frame, self.last_type = point, frame, type
+        if type == 0:
             self.last_observed_iter = len(self.list)
     def get_disp_points(self):
         total = len(self.list)
@@ -238,19 +287,19 @@ class Canvas(object):
             else:
                 scale_y = np.mean([self.scale_dict[e][1] for e in self.scale_dict if self.scale_dict[e] is not None])
             scale_x = self.img_height/self.obj_camera_array.trackers_dict[elem].obj_STP.perspective_transformer.transformed_width_for_pred
-            self.scale_dict[elem] = (scale_x,scale_y)
+            self.scale_dict[elem] = (scale_x, scale_y)
         # print("self.scale_dict:",self.scale_dict)
         return self.scale_dict   
   
     def get_canvas(self):
-        self.canvas = np.zeros((self.img_height,self.img_width,3),np.uint8)
+        self.canvas = np.zeros((self.img_height, self.img_width, 3), np.uint8)
         count = 0
         for elem in self.region_dict:
-            self.canvas = self.region_dict[elem]["monitor_region"].draw(img=self.canvas,x=count*self.cam_region_width)
-            self.canvas = self.region_dict[elem]["unmonitor_region"].draw(img=self.canvas,x=count*self.cam_region_width+self.region_dict[elem]["monitor_region"].shape[1])
-            count+=1
+            self.canvas = self.region_dict[elem]["monitor_region"].draw(img=self.canvas, x=count*self.cam_region_width)
+            self.canvas = self.region_dict[elem]["unmonitor_region"].draw(img=self.canvas, x=count*self.cam_region_width + self.region_dict[elem]["monitor_region"].shape[1])
+            count += 1
         if self.lane_markers_display:
-            self.canvas = cv2.line(self.canvas,(0,int(self.img_height/2)),(self.img_width-1,int(self.img_height/2)),(255,255,255),2)
+            self.canvas = cv2.line(self.canvas, (0, int(self.img_height/2)), (self.img_width-1, int(self.img_height/2)), (255, 255, 255), 2)
         
         return self.canvas
     # inter camera
@@ -266,12 +315,12 @@ class Canvas(object):
             unmonitor_region_width = self.cam_region_width - monitor_region_width
             unmonitor_region_height = self.img_height
             
-            obj_monitor_region = Region(id=elem,shape=(monitor_region_height,monitor_region_width),disp_info=device_info[elem])
-            obj_unmonitor_region = Region(type="unmonitored",id=elem,shape=(unmonitor_region_height,unmonitor_region_width))
+            obj_monitor_region = Region(id=elem, shape=(monitor_region_height, monitor_region_width), disp_info=device_info[elem])
+            obj_unmonitor_region = Region(type="unmonitored", id=elem, shape=(unmonitor_region_height, unmonitor_region_width))
             
             self.region_dict[elem] = {
-                    "monitor_region":obj_monitor_region,
-                    "unmonitor_region":obj_unmonitor_region,
+                    "monitor_region": obj_monitor_region,
+                    "unmonitor_region": obj_unmonitor_region,
                     }    
                     
 class Vehicle(object):
@@ -279,7 +328,7 @@ class Vehicle(object):
                 type=None,
                 color=None,
                 id=None,
-                scale=(10,10)):
+                scale=(10, 10)):
         self.type = type
         self.color = color
         self.id = id
@@ -292,30 +341,30 @@ class Vehicle(object):
             self.shape = (int(vehicle_shape['car'][0]*self.scale[0]),
                           int(vehicle_shape['car'][1]*self.scale[1]))
         
-    def draw(self,img,x,y,mode='visible',icon=None):
+    def draw(self, img, x, y, mode='visible', icon=None):
         if icon is None:
-            top_left = (x,y-int(self.shape[0]/2))
-            top_right = (x+self.shape[1],y-int(self.shape[0]/2))
-            bottom_left = (x,y+int(self.shape[0]/2))
-            bottom_right = (x+self.shape[1],y+int(self.shape[0]/2))
-            img = cv2.circle(img,(x,y),2,self.color,2)
-            img = cv2.rectangle(img,top_left,bottom_right,self.color,2)
-            img = cv2.line(img,top_left,bottom_right,self.color,2)
-            img = cv2.line(img,top_right,bottom_left,self.color,2)
+            top_left = (x, y-int(self.shape[0]/2))
+            top_right = (x+self.shape[1], y-int(self.shape[0]/2))
+            bottom_left = (x, y+int(self.shape[0]/2))
+            bottom_right = (x+self.shape[1], y+int(self.shape[0]/2))
+            img = cv2.circle(img, (x, y), 2, self.color, 2)
+            img = cv2.rectangle(img, top_left, bottom_right, self.color, 2)
+            img = cv2.line(img, top_left, bottom_right, self.color, 2)
+            img = cv2.line(img, top_right, bottom_left, self.color, 2)
         else:
-            resize_icon = cv2.resize(icon,(self.shape[1],self.shape[0]))
-            x_top,x_bottom = x-int(self.shape[0]/2),x+int(self.shape[0]/2)
-            y_top,y_bottom = y,y+self.shape[1]
-            img[x_top:x_bottom,y_top:y_bottom] = resize_icon
+            resize_icon = cv2.resize(icon, (self.shape[1], self.shape[0]))
+            x_top, x_bottom = x-int(self.shape[0]/2), x+int(self.shape[0]/2)
+            y_top, y_bottom = y, y+self.shape[1]
+            img[x_top:x_bottom, y_top:y_bottom] = resize_icon
             
         if self.id is not None:
-            img = cv2.putText(img,str(self.id),(x,y),cv2.FONT_HERSHEY_SIMPLEX,1,(255,255,255),2)
+            img = cv2.putText(img, str(self.id), (x, y), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
         return img
         
 class Region(object):
     def __init__(self,
                 type=None,
-                color=(0,0,100),
+                color=(0, 0, 100),
                 id=None,
                 shape=None,
                 disp_info=None):
@@ -324,43 +373,43 @@ class Region(object):
         self.id = id
         self.shape = shape
         self.disp_info = disp_info
-    def draw(self,img,x):
+    def draw(self, img, x):
         # Draw color
         if self.type is not None:
-            region_img = np.ones((self.shape[0],self.shape[1],3),np.uint8)*self.color
+            region_img = np.ones((self.shape[0], self.shape[1], 3), np.uint8)*self.color
         else:
-            region_img = np.ones((self.shape[0],self.shape[1],3),np.uint8)
+            region_img = np.ones((self.shape[0], self.shape[1], 3), np.uint8)
         # Draw text
         if self.disp_info is not None:
-            region_img = cv2.putText(region_img,self.disp_info,(0,self.shape[0]-3),cv2.FONT_HERSHEY_SIMPLEX,1,(255,255,255),1)
-        img[0:self.shape[0],x:x+self.shape[1]] = region_img
+            region_img = cv2.putText(region_img, self.disp_info, (0, self.shape[0]-3), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 1)
+        img[0:self.shape[0], x:x+self.shape[1]] = region_img
         return img
         
 # ===== TEST FUNCITONS =====
 def Canvas_test():
     obj = Canvas()
     img = obj.get_canvas()
-    cv2.imshow('img',img)
+    cv2.imshow('img', img)
     cv2.waitKey()
 
 def Vehicle_test():
-    img = np.zeros((600,800,3),np.uint8)
-    obj = Vehicle(type='car',color=colors[0],id=0)
-    img = obj.draw(img=img,x=100,y=100)
+    img = np.zeros((600, 800, 3), np.uint8)
+    obj = Vehicle(type='car', color=colors[0], id=0)
+    img = obj.draw(img=img, x=100, y=100)
     # icon = np.ones((20,100,3),np.uint8)*255
     # img = obj.draw(img=img,x=100,y=100,icon=icon)
-    cv2.imshow('img',img)
+    cv2.imshow('img', img)
     cv2.waitKey()
     
 def Region_test():
-    img = np.zeros((100,800,3),np.uint8)
-    obj = Region(type='unmonitored',shape=(100,200))
-    img = obj.draw(img=img,x=100)
-    cv2.imshow('img',img)
+    img = np.zeros((100, 800, 3), np.uint8)
+    obj = Region(type='unmonitored', shape=(100, 200))
+    img = obj.draw(img=img, x=100)
+    cv2.imshow('img', img)
     cv2.waitKey()
     
 if __name__=="__main__":
     pass
     # Vehicle_test()
     # Region_test()
-    # Canvas_test()
+    Canvas_test()

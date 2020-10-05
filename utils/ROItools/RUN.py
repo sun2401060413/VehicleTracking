@@ -12,9 +12,9 @@
 '''
 import os, sys, cv2, time
 import numpy as np
-from Window import Ui_TabWidget
+from utils.ROItools.Window import Ui_TabWidget
 from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5.QtWidgets import QFileDialog,QTabWidget,QLabel,QWidget 
+from PyQt5.QtWidgets import QFileDialog, QTabWidget, QLabel, QWidget
 from PyQt5.QtCore import QTimer, QThread, pyqtSignal, Qt, QPoint, QRect, QPointF
 from PyQt5.QtGui import QPixmap, QImage, QPainter, QColor, QPen, QPolygon, QPainterPath, QPolygonF,QBrush
 import json
@@ -24,7 +24,7 @@ import glog
 class mywindow(QTabWidget,Ui_TabWidget): 
 
     def __init__(self):
-        super(mywindow,self).__init__()
+        super(mywindow, self).__init__()
         self.setupUi(self)
         
         self.filename = None
@@ -93,7 +93,7 @@ class mywindow(QTabWidget,Ui_TabWidget):
             self.fps            = cap.get(cv2.CAP_PROP_FPS)
             self.frame_count    = cap.get(cv2.CAP_PROP_FRAME_COUNT)
 
-            open_filepath_root,filename = os.path.split(videoName)
+            open_filepath_root, filename = os.path.split(videoName)
             self.filefolder = open_filepath_root
             self.filename = filename
             
@@ -198,11 +198,18 @@ class mywindow(QTabWidget,Ui_TabWidget):
         self.transformed_height_for_disp = float(self.textedit_5.text())
         
         dist_transformed_points = []
-        dist_transformed_points.append([0, 0])
-        dist_transformed_points.append([self.transformed_width_for_pred, 0])
-        dist_transformed_points.append([self.transformed_width_for_pred, self.transformed_height_for_pred])
-        dist_transformed_points.append([0, self.transformed_height_for_pred])
-        
+        # dir: bottom-top
+        dist_transformed_points.append([0, self.transformed_height_for_pred])  # 3-0
+        dist_transformed_points.append([self.transformed_width_for_pred, self.transformed_height_for_pred]) # 2-
+        dist_transformed_points.append([self.transformed_width_for_pred, 0])    # 1-2
+        dist_transformed_points.append([0, 0])  # 0-3
+
+        # dir: top-bottom
+        # dist_transformed_points.append([0, 0])  # 0-3
+        # dist_transformed_points.append([self.transformed_width_for_pred, 0])  # 1-2
+        # dist_transformed_points.append([self.transformed_width_for_pred, self.transformed_height_for_pred])  # 2-1
+        # dist_transformed_points.append([0, self.transformed_height_for_pred])  # 3-0
+
         self.disp_ratio = 50
         disp_transformed_points = []
         disp_transformed_points.append([0, 0])
@@ -235,7 +242,7 @@ class mywindow(QTabWidget,Ui_TabWidget):
         return
         
     def transformer_saving(self):
-        f_name,ext_name = os.path.splitext(self.filename)
+        f_name, ext_name = os.path.splitext(self.filename)
         export_info = {}
         if self.transform_matrix_for_pred is None:
             self.get_transform_matrix()
@@ -253,8 +260,8 @@ class mywindow(QTabWidget,Ui_TabWidget):
         
         export_info["endpoints"] = np.array(self.ratio_roi_points).tolist()
         
-        with open(os.path.join(self.filefolder,f_name+"_transformer.json"), "w") as doc:
-            json.dump(export_info,doc)
+        with open(os.path.join(self.filefolder, f_name+"_transformer.json"), "w") as doc:
+            json.dump(export_info, doc)
         glog.info("文件保存于:{}！".format(self.filefolder))
         return
         
@@ -294,7 +301,7 @@ class MyLabel(QtWidgets.QLabel):
         
         self.tmp_center_pt      =   None
         
-    def init_roi_rect(self,height,width,offset_x,offset_y):
+    def init_roi_rect(self, height, width, offset_x, offset_y):
         roi_points = []
         roi_points.append(QPoint(int(width/4+offset_x), int(height/4+offset_y)))
         roi_points.append(QPoint(int(width*3/4+offset_x), int(height/4+offset_y)))
@@ -303,7 +310,7 @@ class MyLabel(QtWidgets.QLabel):
         self.roi_rect = roi_points
         return roi_points
         
-    def paintEvent(self,event):
+    def paintEvent(self, event):
         if self.display_status:
             super().paintEvent(event)
             painter = QPainter(self)
@@ -405,45 +412,49 @@ class Thread(QThread):#采用线程来播放视频
                 break
 
                 
-def get_point_index(points_list,point):
+def get_point_index(points_list, point):
     for i, elem in enumerate(points_list):
         if elem == point:
             return i
     return -1
-                
-def get_distance_between_current_pt_and_nearest_pt(points,x,y):
+
+
+def get_distance_between_current_pt_and_nearest_pt(points, x, y):
     dist = []
     for elem in points:
-        dist.append([get_manhattanLength(elem.x(),elem.y(),x,y),elem])  
+        dist.append([get_manhattanLength(elem.x(), elem.y(), x, y), elem])
+
     def takefirstelem(elem):
         return elem[0]
     dist.sort(key=takefirstelem)
     return dist[0]
 
-def get_manhattanLength(x1,y1,x2,y2):
+
+def get_manhattanLength(x1, y1, x2, y2):
     return abs(x2-x1)+abs(y2-y1)
-                    
+
+
 def get_default_filepath():
     current_file_path = os.path.abspath(__file__)
     current_root, filename = os.path.split(current_file_path)
-    if os.path.exists(os.path.join(current_root,"config.json")):
-        with open(os.path.join(current_root,"config.json"),"r") as doc:
+    if os.path.exists(os.path.join(current_root, "config.json")):
+        with open(os.path.join(current_root, "config.json"), "r") as doc:
             config_data = json.load(doc)
     else:
         config_data = {}
         config_data["default_path"] = os.path.abspath(__file__)
-        with open(os.path.join(current_root,"config.json"),"w") as doc:
-            json.dump(config_data,doc)
+        with open(os.path.join(current_root, "config.json"), "w") as doc:
+            json.dump(config_data, doc)
     return config_data["default_path"]
     
 def set_default_filepath(filepath=None):
     current_file_path = os.path.abspath(__file__)
     current_root, filename = os.path.split(current_file_path)
-    with open(os.path.join(current_root,"config.json"),"r") as doc:
+    with open(os.path.join(current_root, "config.json"), "r") as doc:
         config_data = json.load(doc)
     config_data["default_path"] = filepath
-    with open(os.path.join(current_root,"config.json"),"w") as doc:
-        json.dump(config_data,doc)
+    with open(os.path.join(current_root, "config.json"), "w") as doc:
+        json.dump(config_data, doc)
 
 def cv_imread(filePath):
     cv_img = cv2.imdecode(np.fromfile(filePath, dtype=np.uint8), -1)
